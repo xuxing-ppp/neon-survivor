@@ -100,9 +100,10 @@
         if (s.freeze) out.push("落地冻结 " + (Math.round(s.freeze * 10) / 10) + "s");
         break;
       case "blade_aura":
-        if (s.splash) out.push("溅射 " + R(s.damage * s.splashMul));
-        if (s.pull) out.push("吸力 " + R(s.pull));
-        out.push("刃触0.25s · 圈伤0.4s");
+        out.push("光刃 " + F10(s.damage) + "/" + F10(s.bladeTick) + "s");
+        out.push("命中溅射 " + F10(s.splashDamage) + "(半径" + R(s.splash) + ")");
+        out.push("圆盘 " + F10(s.auraDamage) + "/" + F10(s.auraTick) + "s(半径" + R(s.radius) + ")");
+        out.push("吸力停止于刃轨道 " + Math.round(s.pullStopRatio * 100) + "%");
         break;
       case "crescent_evo":
         if (s.leaveTrail) out.push("弧地 " + R(s.damage * 0.25) + "/0.5s×1.2s · 70%–100%半径带");
@@ -169,7 +170,7 @@
       case "shockwave_frost":if(s.freeze)out.push("Freeze "+F(s.freeze)+"s");if(s.shatter)out.push("Re-hit shatters for 50% (radius "+R(s.shatter)+")");break;
       case "polymorph_timestop":out.push("End/death blast "+R(s.bombDmg)+" (radius "+R(s.bombRadius)+") · Freeze "+F(s.freeze)+"s");break;
       case "timestop_evo":if(s.shatter)out.push("Shatter "+R(s.damage*.5));if(s.freeze)out.push("Impact freeze "+F(s.freeze)+"s");break;
-      case "blade_aura":if(s.splash)out.push("Splash "+R(s.damage*s.splashMul));if(s.pull)out.push("Pull "+R(s.pull));out.push("Blade 0.25s · ring 0.4s");break;
+      case "blade_aura":out.push("Blade "+F(s.damage)+"/"+F(s.bladeTick)+"s");out.push("Hit splash "+F(s.splashDamage)+" (radius "+R(s.splash)+")");out.push("Disk "+F(s.auraDamage)+"/"+F(s.auraTick)+"s (radius "+R(s.radius)+")");out.push("Pull stops at "+Math.round(s.pullStopRatio*100)+"% of blade orbit");break;
       case "crescent_evo":if(s.leaveTrail)out.push("Arc field "+R(s.damage*.25)+"/0.5s×1.2s");break;
       case "chain_evo":out.push("Damage ×1.1 per jump");break;
       case "hex_poison":out.push("Poison "+R(s.dot)+"/0.5s×"+F(s.dotDur)+"s");out.push("Fuse -"+s.fuseCut+"s per jump");out.push("Blast spreads hex + poison");if(s.frac)out.push("Blast +"+Math.round(s.frac*100)+"% max HP (Boss ÷5)");break;

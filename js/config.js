@@ -26,6 +26,7 @@
     GEM_PULL_BASE: 540,     // 经验球远场牵引速度上限(受磁吸属性放大)
     GEM_PULL_NEAR_K: 10,    // 经验球近场牵引速度系数(速度 = d * K,随距离线性衰减防过冲)
     IFRAME: 0.85, // 受击无敌秒数
+    ESHOT_IFRAME: 0.15, // 敌弹短保护:防同帧重叠弹瞬杀,不影响接触/激光/地形伤害
     REGEN_INTERVAL: 1, // 回血结算间隔
     // 吸血属性采用指数收敛；当前吸血率也直接作为每秒回血预算占最大生命的比例。
     LIFESTEAL_FIRST: 0.009,
@@ -37,10 +38,11 @@
     BLINK_DISTANCE: 180,
     BLINK_GAP: 40,
     // 无尽模式
-    ENDLESS_BOSS_EVERY: 60, // 无尽模式 Boss 波间隔(秒)= 1min(且 Boss 不掉宝箱)
+    ENDLESS_BOSS_FIRST: 20.5 * 60,
+    ENDLESS_BOSS_EVERY: 90, // 无尽模式从 20:30 起每 1.5min 一波
     ENDLESS_HP_PER_MIN: 0.18, // 无尽模式每分钟额外敌血倍率
-    // 通关前的三次周期多 Boss 波;无尽从 21min 起每 60s 一波
-    LATE_BOSS_TIMES: [16.5 * 60, 18 * 60, 19.5 * 60],
+    // 通关前的三次多 Boss 波
+    LATE_BOSS_TIMES: [15.5 * 60, 17.5 * 60, 19 * 60],
     // 空间网格
     CELL: 48,
     // 定点轰炸索敌(时停/陨石):避开玩家近旁的最小距离(让出近战范围,索敌中远敌群)
@@ -364,7 +366,7 @@
     polymorph_evo: Object.assign({}, WEAPONS.polymorph, { name: EVOLUTIONS.polymorph.name, color: EVOLUTIONS.polymorph.color, icon: EVOLUTIONS.polymorph.icon, evo: true, stats: function (lv) { const s = WEAPONS.polymorph.stats(8); return Object.assign({}, s, { damage: 27, count: s.count + 1, dur: 4.5, pierce: 1 }); } }),
     timestop_evo: Object.assign({}, WEAPONS.timestop, { name: EVOLUTIONS.timestop.name, color: EVOLUTIONS.timestop.color, icon: EVOLUTIONS.timestop.icon, evo: true, stats: function (lv) { const s = WEAPONS.timestop.stats(8); return Object.assign({}, s, { damage: 33.5, radius: 102, freeze: s.freeze + 0.6, count: s.count + 1, shatter: true }); } }),
     // ── 协同进化(两把已进化武器合成)。kind:"fusion" 由 weapons.js 分发双机制。
-    blade_aura: Object.assign({}, WEAPONS.blade, { name: "湮灭之轮", color: "#ffd0a0", icon: "☀", evo: true, kind: "fusion", fuse: ["blade_evo", "aura_evo"], stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: 46.2, count: 8, radius: s.radius * 1.6, spin: s.spin + 1.2, splash: 26, splashMul: 0.6, pull: 150 }; } }),
+    blade_aura: Object.assign({}, WEAPONS.blade, { name: "湮灭之轮", color: "#ffd0a0", icon: "☀", evo: true, kind: "fusion", fuse: ["blade_evo", "aura_evo"], stats: function (lv) { const s = WEAPONS.blade.stats(8); return { damage: 46.2, bladeTick: 0.25, count: 8, radius: s.radius * 1.6, spin: s.spin + 1.2, splash: 26, splashDamage: 27.72, auraDamage: 27.72, auraTick: 0.4, pull: 150, pullRangeMul: 1.3, pullStopRatio: 0.96 }; } }),
     missile_chain: Object.assign({}, WEAPONS.missile, { name: "雷暴蜂群", color: "#ff9a3c", icon: "⚡", evo: true, kind: "fusion", tags: ["ranged", "spell"], fuse: ["missile_evo", "chain_evo"], stats: function (lv) { return { damage: 43.74, cooldown: 0.9, count: 5, speed: 300, seek: 5, life: 2.2, chase: 2, chaseDecay: 1, chainHops: 3, chainRange: 180 }; } }),
     railgun_grenade: Object.assign({}, WEAPONS.railgun, { name: "轨道轰炸", color: "#ff5d73", icon: "☄", evo: true, kind: "fusion", fuse: ["railgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.railgun.stats(8); return Object.assign({}, s, { damage: 223, cooldown: 1.6, explode: 58, cluster: 2 }); } }),
     frost_poison: Object.assign({}, WEAPONS.frost, { name: "冰霜瘟疫", color: "#a8f0ff", icon: "❅", evo: true, kind: "fusion", tags: ["spell"], fuse: ["frost_evo", "poison_evo"], stats: function () { return { damage: 38, radius: 215, cooldown: 0.85, slow: 0.5, slowDur: 1.4, expand: 620, dot: 24, dotDur: 4, freeze: 0.5, freezeHits: 3 }; } }),
@@ -373,7 +375,7 @@
     shotgun_grenade: Object.assign({}, WEAPONS.shotgun, { name: "爆裂霰弹", color: "#ffe066", icon: "≣", evo: true, kind: "fusion", fuse: ["shotgun_evo", "grenade_evo"], stats: function (lv) { const s = WEAPONS.shotgun.stats(8); return Object.assign({}, s, { damage: 65.12, cooldown: 0.8, count: s.count + 2, cone: s.cone * 1.2, splash: 28, splashMul: 0.45 }); } }),
     meteor_chain: Object.assign({}, WEAPONS.meteor, { name: "陨雷审判", color: "#ffb14d", icon: "☄", evo: true, kind: "fusion", fuse: ["meteor_evo", "chain_evo"], stats: function (lv) { const s = WEAPONS.meteor.stats(8); return Object.assign({}, s, { damage: 109.38, count: s.count + 2, radius: Math.round(s.radius * 1.2), burn: 24.5, burnDur: 2.2, chainHops: 3, chainRange: 170 }); } }),
     shockwave_frost: Object.assign({}, WEAPONS.shockwave, { name: "冰碎共振", color: "#a8f0ff", icon: "◎", evo: true, kind: "fusion", tags: ["melee", "spell"], fuse: ["shockwave_evo", "frost_evo"], stats: function (lv) { const s = WEAPONS.shockwave.stats(8); return Object.assign({}, s, { damage: 220, count: s.count + 1, radius: Math.round(s.radius * 1.25), knock: s.knock + 22, freeze: 1.2, shatter: 60, shatterMul: 0.5 }); } }),
-    hex_poison: Object.assign({}, WEAPONS.hex, { name: "腐朽天灾", color: "#9bff5a", icon: "☣", evo: true, kind: "fusion", tags: ["spell"], fuse: ["hex_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.hex.stats(8); return Object.assign({}, s, { damage: 70, count: s.count + 2, spread: s.spread + 2, frac: Math.min(0.22, s.frac + 0.10), dot: 38, dotDur: 2.5, fuseCut: 0.15 }); } }),
+    hex_poison: Object.assign({}, WEAPONS.hex, { name: "腐朽天灾", color: "#9bff5a", icon: "☣", evo: true, kind: "fusion", tags: ["spell"], fuse: ["hex_evo", "poison_evo"], stats: function (lv) { const s = WEAPONS.hex.stats(8); return Object.assign({}, s, { damage: 30, count: s.count + 7, spread: s.spread + 4, frac: 0.15, dot: 32, dotDur: 3.5, fuseCut: 0.15 }); } }),
     crescent_detonate: Object.assign({}, WEAPONS.crescent, { name: "血月断头台", color: "#ff7a8a", icon: "☾", evo: true, kind: "fusion", tags: ["melee"], fuse: ["crescent_evo", "detonate_evo"], stats: function (lv) { const s = WEAPONS.crescent.stats(8); const d = WEAPONS.detonate.stats(8); return { damage: 50.63, radius: Math.round(s.radius * 1.25), arc: s.arc + 0.4, count: s.count + 1, explodeChance: 1.0, explodeR: d.explodeR + 12, explodeDmg: 86.62, chainHops: 2, explodeBudget: 5 }; } }),
     polymorph_timestop: Object.assign({}, WEAPONS.polymorph, { name: "时之诅咒", color: "#d6b3ff", icon: "◷", evo: true, kind: "fusion", tags: ["spell"], fuse: ["polymorph_evo", "timestop_evo"], stats: function (lv) { const pp = WEAPONS.polymorph.stats(8); return { damage: 218.88, cooldown: 3.5, speed: pp.speed, life: pp.life, count: 3, dur: 2.7, bombDmg: 273.6, bombRadius: 90, freeze: 1.4, pierce: 1 }; } }),
     spear_lance: Object.assign({}, WEAPONS.spear, { name: "贯星长矛", color: "#ffd27a", icon: "➹", evo: true, kind: "fusion", tags: ["ranged", "melee"], fuse: ["spear_evo", "lance_evo"], stats: function () { return { damage: 282, cooldown: 0.8, radius: 251, width: 30, armorBreak: 1.5, gridDmg: 60, gridTick: 0.2, gridLife: 0.8, gridLen: 240, gridWidth: 18, gridMax: 4 }; } }),
@@ -533,7 +535,7 @@
     zombie: { name: "腐行者", hp: 10, speed: 55, dmg: 8, xp: 1, r: 12, color: "#7dd87a", ai: "chase", shape: "circle", skill: "直行追击玩家" },
     runner: { name: "飞刃虫", hp: 6, speed: 132, dmg: 6, xp: 1, r: 9, color: "#ff5d6c", ai: "fast", shape: "triangle", skill: "高速摇摆追击" },
     brute: { name: "重装兵", hp: 60, speed: 40, dmg: 18, xp: 5, r: 21, color: "#b06bff", ai: "tank", shape: "square", skill: "缓慢重装推进,高血量" },
-    shooter: { name: "炮台", hp: 18, speed: 70, dmg: 6, projDmg: 8, xp: 3, r: 13, color: "#5ad1ff", ai: "shooter", shape: "pentagon", pattern: "barrel", skill: "中距游走,远程射击(接触伤害较低)" },
+    shooter: { name: "炮台", hp: 18, speed: 70, dmg: 6, projDmg: 8, shotWarn: 0.6, shotInterval: 1.9, shotSpeed: 230, shotRange: 360, xp: 3, r: 13, color: "#5ad1ff", ai: "shooter", shape: "pentagon", pattern: "barrel", skill: "中距游走,停步蓄力后远程射击(接触伤害较低)" },
     bomber: { name: "自爆虫", hp: 14, speed: 96, dmg: 14, xp: 2, r: 14, color: "#ff9a3c", ai: "bomber", aoe: 40, shape: "blob", pattern: "crack", skill: "冲撞玩家,贴身自爆(AOE)" },
     swarmer: { name: "食脑蛛", hp: 3, speed: 150, dmg: 4, xp: 1, r: 6, color: "#ffe14d", ai: "fast", shape: "triangle", skill: "成群高速蜂拥" },
     spawner: { name: "母虫巢", hp: 80, speed: 0, dmg: 8, xp: 12, r: 22, color: "#ff5dc0", ai: "spawner", shape: "hex", pattern: "cells", skill: "静止不动,持续孵化食脑蛛(接触伤害较低)" },
@@ -542,7 +544,7 @@
     blinker: { name: "闪烁者", hp: 16, speed: 80, dmg: 10, xp: 3, r: 12, color: "#c084fc", ai: "blink", shape: "diamond", skill: "追击中周期瞬移贴脸" },
     splitter: { name: "分裂者", hp: 42, speed: 68, dmg: 12, xp: 6, r: 18, color: "#8aff7d", ai: "splitter", shape: "blob", skill: "死亡分裂成 2 只食脑蛛" },
     shielder: { name: "盾甲兵", hp: 55, speed: 50, dmg: 16, xp: 7, r: 18, color: "#6b8aff", ai: "shield", dr: 0.55, shape: "hex", pattern: "inner_hex", skill: "高额减伤(受伤 -55%)" },
-    sniper: { name: "狙击手", hp: 20, speed: 60, dmg: 6, projDmg: 11, xp: 6, r: 12, color: "#ff8aff", ai: "sniper", shape: "diamond", pattern: "sight", skill: "远程站桩,精确狙击(接触伤害较低)" },
+    sniper: { name: "狙击手", hp: 20, speed: 60, dmg: 6, projDmg: 11, shotWarn: 0.85, shotInterval: 3.4, shotSpeed: 380, shotRange: 480, xp: 6, r: 12, color: "#ff8aff", ai: "sniper", shape: "diamond", pattern: "sight", skill: "远程站桩,停步蓄力后精确狙击(接触伤害较低)" },
     regen: { name: "自愈者", hp: 48, speed: 56, dmg: 14, xp: 6, r: 16, color: "#5affb0", ai: "regen", regenRate: 7, shape: "cross", pattern: "plus", skill: "持续回血" },
     warden: { name: "光环盾卫", hp: 52, speed: 48, dmg: 14, xp: 8, r: 19, color: "#8aa0ff", ai: "shield_aura", shape: "hex", pattern: "double_hex", auraR: 140, auraDr: 0.40, skill: "给周围敌人套减伤护盾(减伤随时间提升,上限70%)" },
     priest: { name: "血祭司", hp: 42, speed: 52, dmg: 12, xp: 8, r: 17, color: "#ff6b8a", ai: "heal_aura", shape: "star", pattern: "trident", auraR: 130, healRate: 4, skill: "治疗周围敌人(不治疗同类,治疗量随时间回升)" },
@@ -552,38 +554,55 @@
     slimer: { name: "腐泥", hp: 28, speed: 58, dmg: 10, xp: 5, r: 14, color: "#9bff5a", ai: "slime", shape: "blob", trailInterval: 0.30, trailDur: 3.5, trailDmg: 8, skill: "摇摆追击,路径留下连续毒径" }
   };
 
-  // ── Boss。tier:难度级(每关按 5/10/14min 依 T1→T2→T3 递增出)。skill 为图鉴文案。
+  // ── Boss。tier:难度级(每关按 5/9.5/13.5min 依 T1→T2→T3 递增出)。skill 为图鉴文案。
   // shotStyle:Boss 弹幕专属视觉风格(ring 空心魔环 / bolt 高速光矛 / rune 符文菱形),普通敌弹不受影响
   const BOSSES = {
-    duke: { name: "肥胖公爵", icon: "☠", hp: 980, speed: 40, dmg: 21, attacks: { projectile: [10] }, mechanics: { summonInterval: 5, summonCount: 3, ringInterval: 3.2, ringShots: 12, ringSpeed: 165 }, r: 40, color: "#d65a8a", xp: 60, tier: 1, shape: "hex", pattern: "crown", shotStyle: "ring", skill: "召唤僵尸 + 环形弹幕" },
-    wraith: { name: "双生怨灵", icon: "☾", hp: 800, speed: 100, dmg: 15, attacks: { projectile: [13] }, mechanics: { orbitRadius: 250, orbitRate: 1.3, attackInterval: 1.8, shotSpeed: 260, enragedOrbitMul: 1.6, enragedInterval: 0.9, enrageRingInterval: 4.2, enrageRingShots: 8, enrageRingSpeed: 190 }, r: 24, color: "#9b6bff", xp: 50, tier: 2, count: 2, shape: "diamond", pattern: "crescent", shotStyle: "bolt", skill: "环绕飞行 + 扇形弹幕(同伴死则狂暴加速并释放弹环)" },
+    duke: { name: "肥胖公爵", icon: "☠", hp: 980, speed: 40, dmg: 21, attacks: { projectile: [10, 10] }, mechanics: { summonInterval: 5, summonCount: 3, ringInterval: 3.2, ringShots: 12, ringSpeed: 165, seamSpeed: 205 }, r: 40, color: "#d65a8a", xp: 60, tier: 1, shape: "hex", pattern: "crown", shotStyle: "ring", skill: "召唤僵尸 + 环形弹幕 + 预测封路弹" },
+    wraith: { name: "双生怨灵", icon: "☾", hp: 736, speed: 100, dmg: 15, attacks: { projectile: [11] }, mechanics: { orbitRadius: 250, orbitRate: 1.3, attackInterval: 2.1, shotSpeed: 260, enragedOrbitMul: 1.6, enragedInterval: 1.2, enrageRingInterval: 5.0, enrageRingShots: 6, enrageRingSpeed: 190 }, r: 24, color: "#9b6bff", xp: 50, tier: 2, count: 2, shape: "diamond", pattern: "crescent", shotStyle: "bolt", skill: "环绕飞行 + 较缓的预测扇形弹幕(同伴死则狂暴并间歇释放六向弹环)" },
     scavenger: { name: "拾荒机兵", icon: "⚙", hp: 875, speed: 62, dmg: 19, attacks: { projectile: [10] }, mechanics: { warn: 0.9, interval: 4.5, chargeSpeed: 270, chargeDuration: 0.45, recovery: 0.75, exitShots: 5, exitSpread: 0.24, shotSpeed: 220 }, r: 35, color: "#f1ad62", xp: 55, tier: 1, shape: "square", pattern: "nodes", shotStyle: "bolt", skill: "追击 + 预警冲刺 + 冲刺终点扇射" },
-    frostwarden: { name: "霜壳守卫", icon: "❄", hp: 1035, speed: 44, dmg: 18, attacks: { projectile: [9] }, mechanics: { warn: 0.7, follow: 0.5, interval: 3.4, flankAngle: 0.34, flankSpeed: 180, centerSpeed: 195 }, r: 39, color: "#8ddfff", xp: 65, tier: 1, shape: "hex", pattern: "double_hex", shotStyle: "rune", skill: "锁定方位，先射两侧冰弹，再补中路冰弹" },
+    frostwarden: { name: "霜壳守卫", icon: "❄", hp: 1035, speed: 44, dmg: 18, attacks: { projectile: [9], laser: [6] }, mechanics: { warn: 0.8, beamDuration: 0.38, follow: 0.45, interval: 3.6, flankAngle: 0.34, beamLength: 600, beamWidth: 10, centerSpeed: 195 }, r: 39, color: "#8ddfff", xp: 65, tier: 1, shape: "hex", pattern: "double_hex", shotStyle: "rune", skill: "预测锁定方位，双侧冰激光封路后补中路冰弹" },
     bloodhunter: { name: "血棘猎手", icon: "✦", hp: 900, speed: 62, dmg: 17, attacks: { projectile: [9] }, mechanics: { range: 245, swayRate: 3, swayAngle: 0.38, warn: 0.75, interval: 3.6, flankDist: 210, spread: 0.34, shotSpeed: 215 }, r: 32, color: "#ff5278", xp: 60, tier: 1, shape: "triangle", pattern: "bloodthorn", shotStyle: "bolt", skill: "锁定玩家位置，从两侧发射交汇棘弹" },
     riftsentry: { name: "裂隙哨兵", icon: "◇", hp: 990, speed: 46, dmg: 18, attacks: { projectile: [8, 9] }, mechanics: { warn: 0.8, interval: 4.0, portalDist: 180, spread: 0.30, shotSpeed: 190 }, r: 38, color: "#a58bff", xp: 65, tier: 1, shape: "diamond", pattern: "rift", shotStyle: "rune", skill: "从成对裂隙向锁定位置交叉射击" },
-    thornwarden: { name: "铁棘卫士", icon: "✥", hp: 1000, speed: 48, dmg: 18, attacks: { projectile: [9] }, mechanics: { warn: 0.8, recovery: 0.65, interval: 3.5, armor: 0.25, spread: 0.38, shotSpeed: 215 }, r: 37, color: "#c47a9b", xp: 65, tier: 1, shape: "hex", pattern: "shield", shotStyle: "bolt", skill: "展开护甲后发射扇形弹幕，射后短暂硬直" },
-    queen: { name: "蜂后", icon: "☼", hp: 2200, speed: 30, dmg: 23, attacks: { projectile: [13] }, mechanics: { summonInterval: 5, summonCount: 4, ringInterval: 2.6, ringShots: 14, ringSpeed: 170 }, r: 46, color: "#ff6ab0", xp: 100, tier: 2, shape: "hex", pattern: "honey", shotStyle: "ring", skill: "召唤蜂群 + 环形/螺旋弹幕" },
-    magnetwarper: { name: "磁暴行者", icon: "⚡", hp: 1500, speed: 45, dmg: 17, attacks: { projectile: [13], shock: [11] }, mechanics: { moveMul: 0.7, pullInterval: 5.2, pullDuration: 1.2, pullForce: 120, ringShots: 12, ringSpeed: 175, shockInterval: 0.9, shockRange: 115, releaseShots: 8, releaseSpeed: 230 }, r: 36, color: "#8e7bff", xp: 90, tier: 2, shape: "star", pattern: "poles", shotStyle: "rune", skill: "引力波把玩家吸向自身 + 释放弹环 + 贴身电击圈" },
-    twins: { name: "镜像双子", icon: "◐", hp: 1050, speed: 60, dmg: 13, attacks: { projectile: [12, 13] }, mechanics: { swapInterval: 6.5, swapWarn: 0.25, ringShots: 8, ringSpeed: 180, shotInterval: 1.8, shotSpeed: 260, enragedSpeedMul: 1.5 }, r: 28, color: "#7df9ff", xp: 80, tier: 2, count: 2, shape: "triangle", pattern: "split", shotStyle: "bolt", skill: "追击 + 周期换位(杀其一,本体反噬 25% 并狂暴)" },
-    stormherald: { name: "雷暴使徒", icon: "⚡", hp: 1550, speed: 52, dmg: 18, attacks: { projectile: [12] }, mechanics: { range: 260, sweep: 1.05, shotInterval: 0.14, interval: 2.4, sweepAngle: 1.35, shotSpeed: 310 }, r: 34, color: "#aaa0ff", xp: 95, tier: 2, shape: "star", pattern: "storm", shotStyle: "bolt", skill: "侧向游走 + 扫角电弹连射" },
+    thornwarden: { name: "铁棘卫士", icon: "✥", hp: 1200, speed: 48, dmg: 18, attacks: { projectile: [9] }, mechanics: { warn: 0.8, recovery: 0.65, interval: 3.5, armor: 0.25, spread: 0.38, shotSpeed: 215 }, r: 37, color: "#c47a9b", xp: 65, tier: 1, shape: "hex", pattern: "shield", shotStyle: "bolt", skill: "厚重高血量，展开护甲后预测扇射，射后短暂硬直" },
+    queen: { name: "蜂后", icon: "☼", hp: 2200, speed: 30, dmg: 23, attacks: { projectile: [13, 10] }, mechanics: { summonInterval: 5, summonCount: 4, ringInterval: 2.6, ringShots: 12, ringSpeed: 170, aimedShots: 1, aimedSpread: 0.24, aimedSpeed: 225 }, r: 46, color: "#ff6ab0", xp: 100, tier: 2, shape: "hex", pattern: "honey", shotStyle: "ring", skill: "召唤蜂群 + 螺旋弹幕 + 单发预测封路弹" },
+    magnetwarper: { name: "磁暴行者", icon: "⚡", hp: 1500, speed: 45, dmg: 17, attacks: { projectile: [13], shock: [11] }, mechanics: { moveMul: 0.7, pullInterval: 5.2, pullWarn: 0.75, pullDuration: 1.2, pullForce: 120, ringShots: 12, ringSpeed: 175, shockInterval: 0.9, shockRange: 115, releaseShots: 8, releaseSpeed: 230 }, r: 36, color: "#8e7bff", xp: 90, tier: 2, shape: "star", pattern: "poles", shotStyle: "rune", skill: "预警后释放引力波 + 弹环 + 贴身电击圈" },
+    twins: { name: "镜像双子", icon: "◐", hp: 1050, speed: 60, dmg: 13, attacks: { projectile: [12, 13] }, mechanics: { swapInterval: 6.5, swapWarn: 0.7, ringShots: 8, ringSpeed: 180, shotInterval: 1.8, shotSpeed: 260, enragedSpeedMul: 1.5 }, r: 28, color: "#7df9ff", xp: 80, tier: 2, count: 2, shape: "triangle", pattern: "split", shotStyle: "bolt", skill: "追击 + 预警换位(杀其一,本体反噬 25% 并狂暴)" },
+    stormherald: { name: "雷暴使徒", icon: "⚡", hp: 1550, speed: 52, dmg: 18, attacks: { projectile: [12] }, mechanics: { range: 260, warn: 0.7, sweep: 1.05, shotInterval: 0.14, interval: 2.4, sweepAngle: 1.35, shotSpeed: 310 }, r: 34, color: "#aaa0ff", xp: 95, tier: 2, shape: "star", pattern: "storm", shotStyle: "bolt", skill: "预判绕行方向，预警后顺势扫射电弹" },
     bloodoracle: { name: "血谕祭司", icon: "✧", hp: 1650, speed: 42, dmg: 20, attacks: { projectile: [12] }, mechanics: { ritualWarn: 0.8, ritualInterval: 6, ritualShots: 3, ritualSpread: 0.2, shotSpeed: 230, boltInterval: 2.7, boltShots: 3, boltSpread: 0.28 }, r: 38, color: "#ff718e", xp: 100, tier: 2, shape: "cross", pattern: "trident", shotStyle: "ring", skill: "召唤仪式随从，从存活随从位置发射弹幕" },
-    architect: { name: "架构师", icon: "⌬", hp: 1800, speed: 55, dmg: 23, attacks: { projectile: [13, 14] }, mechanics: { ringInterval: 2.0, ringShots: 10, ringSpeed: 160, turretInterval: 9, offsetInterval: 4.0, offsetShots: 6, offsetSpeed: 150 }, r: 44, color: "#5ad1ff", xp: 120, tier: 3, shape: "square", pattern: "nodes", shotStyle: "rune", skill: "环形弹幕 + 召唤炮台(炮台亦会射击)" },
-    inquisitor: { name: "审判者", icon: "✠", hp: 1650, speed: 60, dmg: 21, attacks: { projectile: [13, 14] }, r: 30, color: "#b06bff", xp: 90, tier: 3, shape: "cross", pattern: "judge", shotStyle: "bolt", skill: "传送贴脸 + 环形/扇形连射" },
-    colossus: { name: "弹幕巨像", icon: "◎", hp: 2700, speed: 0, dmg: 23, attacks: { projectile: [14], laser: [13] }, r: 50, color: "#ff6b4d", xp: 140, tier: 3, shape: "circle", pattern: "reactor", shotStyle: "ring", skill: "不动 + 旋转扫射激光 + 召唤僵尸 + 螺旋弹幕" },
+    architect: { name: "架构师", icon: "⌬", hp: 1800, speed: 55, dmg: 23, attacks: { projectile: [13, 14] }, mechanics: { ringInterval: 2.0, ringShots: 10, ringSpeed: 160, turretInterval: 9, turretMax: 3, turretSpawnDist: 320, turretMinRange: 260, turretMaxRange: 360, turretWarn: 0.75, offsetInterval: 4.0, offsetWarn: 0.85, offsetDist: 240, offsetShots: 6, offsetSpeed: 150 }, r: 44, color: "#5ad1ff", xp: 120, tier: 3, shape: "square", pattern: "nodes", shotStyle: "rune", skill: "预警双源弹环 + 召唤远距预警炮台" },
+    inquisitor: { name: "审判者", icon: "✠", hp: 1650, speed: 60, dmg: 21, attacks: { projectile: [13, 14] }, mechanics: { teleportMin: 2.5, teleportMax: 3.5, teleportWarn: 0.75, teleportDist: 260, ringShots: 10, ringSpeed: 150, arrivalShots: 12, arrivalSpeed: 160, boltInterval: 1.4, boltShots: 3, boltSpread: 0.3, boltSpeed: 280 }, r: 30, color: "#b06bff", xp: 90, tier: 3, shape: "cross", pattern: "judge", shotStyle: "bolt", skill: "预警传送落点 + 新旧位置弹环 + 预测扇射" },
+    colossus: { name: "弹幕巨像", icon: "◎", hp: 2700, speed: 0, dmg: 23, attacks: { projectile: [14], laser: [13] }, mechanics: { sweepInterval: 9, sweepWarn: 0.9, sweepDuration: 6, sweepSpeed: 1.5, laserLength: 600, laserWidth: 16, summonInterval: 2, idleRingInterval: 3 }, r: 50, color: "#ff6b4d", xp: 140, tier: 3, shape: "circle", pattern: "reactor", shotStyle: "ring", skill: "预警旋转扫射激光 + 召唤僵尸 + 螺旋弹幕" },
     furnace: { name: "熔炉核心", icon: "✸", hp: 2450, speed: 30, dmg: 23, attacks: { projectile: [13] }, mechanics: { ringInterval: 3.8, ringShots: 12, ringSpeed: 180, hazardInterval: 5.2, hazardCount: 2, hazardOffset: 90, hazardRadius: 68, hazardDuration: 3.5, hazardWarm: 1 }, r: 46, color: "#ff8b46", xp: 130, tier: 3, shape: "hex", pattern: "reactor", shotStyle: "ring", skill: "双区预警灼烧 + 火环弹幕" },
     voidseer: { name: "虚空观测者", icon: "◈", hp: 2100, speed: 58, dmg: 22, attacks: { projectile: [14] }, mechanics: { warn: 0.7, echoDelay: 0.48, interval: 4.0, teleportDist: 300, echoShots: 8, echoSpeed: 190, arrivalShots: 6, arrivalSpeed: 210, boltInterval: 2.0, boltShots: 3, boltSpread: 0.24, boltSpeed: 280 }, r: 36, color: "#b782ff", xp: 125, tier: 3, shape: "diamond", pattern: "seer", shotStyle: "rune", skill: "预示换位落点，新旧位置夹击弹幕" },
     eclipseeye: { name: "蚀界之眼", icon: "◉", hp: 2250, speed: 48, dmg: 23, attacks: { projectile: [14, 15] }, mechanics: { orbitSpeed: 0.8, orbitRadius: 270, warn: 0.9, secondDelay: 0.55, interval: 4.2, ringShots: 16, ringSpeed: 195, gapHalf: 0.43, boltInterval: 2.0, boltShots: 3, boltSpread: 0.28, boltSpeed: 280 }, r: 42, color: "#de6bca", xp: 130, tier: 3, shape: "circle", pattern: "eclipse", shotStyle: "rune", skill: "环绕游走，追踪扇射 + 双层缺口脉冲弹环" }
   };
 
-  // ── 难度曲线(t=分钟)。目标:开局轻松→5min Boss有压→5-10渐增→~10min峰值→10min+玩家成型反杀
+  function anchored(t, points) {
+    if (t <= points[0][0]) return points[0][1];
+    for (let i = 1; i < points.length; i++) {
+      if (t <= points[i][0]) {
+        const a = points[i - 1], b = points[i], x = (t - a[0]) / (b[0] - a[0]);
+        const smooth = x * x * (3 - 2 * x);
+        return a[1] + (b[1] - a[1]) * smooth;
+      }
+    }
+    return points[points.length - 1][1];
+  }
+  const HP_RATIO = [[0, 1.15], [5, 1.30], [9.5, 1.60], [13.5, 1.90], [15.5, 2.00], [17.5, 2.12], [18, 2.15], [19, 2.18], [20, 2.25], [25, 2.35]];
+  const BOSS_HP_RATIO = [[0, 1.90], [5, 2.00], [9.5, 2.50], [13.5, 2.90], [15.5, 2.95], [17.5, 3.00], [18, 3.00], [19, 3.05], [20, 3.10], [25, 3.15]];
+  const DMG_POINTS = [[0, 1.00], [4, 1.00], [5, 1.10], [9.5, 1.45], [13.5, 1.75], [15.5, 1.90], [17.5, 2.02], [18, 2.05], [19, 2.10], [20, 2.20], [25, 2.70], [30, 3.10]];
+
+  // ── 难度曲线(t=分钟)。血量以旧版基线乘锚点倍率，伤害独立温和回升。
   const CURVES = {
     spawnRate: function (t) { return 1.0 + 0.7 * Math.sqrt(t); }, // 出兵更密。t=1:1.7 t=5:2.57 t=10:3.21 t=15:3.71 t=20:4.13
-    hpFactor: function (t) { return 1.2 + 0.22 * t + 0.012 * t * t + 0.0004 * t * t * t; }, // 初始 +20% & 中后期更陡。t=5:2.96 t=10:5.2 t=15:9.0 t=20:14.2
+    hpFactor: function (t) { return (1.2 + 0.22 * t + 0.012 * t * t + 0.0004 * t * t * t) * anchored(t, HP_RATIO); },
+    bossHpFactor: function (t) { return (1 + 0.2 * t + 0.006 * t * t) * anchored(t, BOSS_HP_RATIO); },
     speedFactor: function (t) { return 1 + 0.03 * t; },
-    dmgFactor: function (t) { return t <= 4 ? 1 : 1 + 0.12 * (t - 4); }, // 4min 起敌伤每分 +12%(配合 5-10min 渐增与 10min 峰值)。t=10:1.72 t=20:2.92
+    dmgFactor: function (t) { return anchored(t, DMG_POINTS); },
     xpForLevel: function (N) { return Math.floor(3 + 2.2 * N + Math.pow(N, 1.2)); },
     // 无尽模式:通关后随(超时分钟)额外敌血/敌伤倍率
-    endlessMul: function (overMin) { return 1 + 0.22 * overMin + 0.01 * overMin * overMin; },
+    endlessHpMul: function (overMin) { return 1 + 0.25 * overMin + 0.012 * overMin * overMin; },
+    endlessDmgMul: function (overMin) { return 1 + 0.04 * overMin; },
     // 光环敌人成长(t=分钟,由 entities.tickAuras 按全局时间回写):
     wardenDr: function (t) { return Math.min(0.70, 0.40 + 0.015 * t); }, // 盾卫减伤:t=0:0.40 t=5:0.475 t=10:0.55 t=15:0.625 t=20:0.70(封顶)
     overdriveR: function (t) { return 150 + 5 * t; }, // 狂热者光环半径:t=0:150 t=5:175 t=10:200 t=15:225 t=20:250
@@ -679,10 +698,10 @@
 
   // ── 关卡(全部直接可选,无需解锁)。bosses=[[候选池,min秒]],bgm=BGM 曲目 id
   const STAGES = {
-    ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [[['scavenger', 'duke', 'riftsentry'], 300], [['wraith', 'stormherald', 'magnetwarper'], 600], [['furnace', 'architect', 'inquisitor'], 840]], envField: null, bgm: "ruins" },
-    crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [[['scavenger', 'thornwarden', 'bloodhunter'], 300], [['wraith', 'queen', 'bloodoracle'], 600], [['furnace', 'colossus', 'eclipseeye'], 840]], envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
-    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [[['duke', 'thornwarden', 'frostwarden'], 300], [['stormherald', 'queen', 'twins'], 600], [['architect', 'colossus', 'voidseer'], 840]], envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.35 }, bgm: "frozen" },
-    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [[['riftsentry', 'bloodhunter', 'frostwarden'], 300], [['magnetwarper', 'bloodoracle', 'twins'], 600], [['inquisitor', 'eclipseeye', 'voidseer'], 840]], envField: { type: "gravity", interval: 18, dur: 1.0, pull: CONST.PLAYER_BASE_SPEED * 0.7 }, bgm: "void" }
+    ruins: { name: "霓虹废墟", goalMin: 20 * 60, half: 1700, palette: PAL.ruins, weights: wRuins, bosses: [[['scavenger', 'duke', 'riftsentry'], 300], [['wraith', 'stormherald', 'magnetwarper'], 570], [['furnace', 'architect', 'inquisitor'], 810]], envField: null, bgm: "ruins" },
+    crimson: { name: "血色荒原", goalMin: 20 * 60, half: 1500, palette: PAL.crimson, weights: wCrimson, bosses: [[['scavenger', 'thornwarden', 'bloodhunter'], 300], [['wraith', 'queen', 'bloodoracle'], 570], [['furnace', 'colossus', 'eclipseeye'], 810]], envField: { type: "burn", interval: 12, dur: 4, r: 90, dps: 14, warm: 2 }, bgm: "crimson" },
+    frozen: { name: "冰封核心", goalMin: 20 * 60, half: 1600, palette: PAL.frozen, weights: wFrozen, bosses: [[['duke', 'thornwarden', 'frostwarden'], 300], [['stormherald', 'queen', 'twins'], 570], [['architect', 'colossus', 'voidseer'], 810]], envField: { type: "freeze", interval: 15, dur: 1.5, slowF: 0.35 }, bgm: "frozen" },
+    void: { name: "虚空深渊", goalMin: 20 * 60, half: 1900, palette: PAL.void, weights: wVoid, bosses: [[['riftsentry', 'bloodhunter', 'frostwarden'], 300], [['magnetwarper', 'bloodoracle', 'twins'], 570], [['inquisitor', 'eclipseeye', 'voidseer'], 810]], envField: { type: "gravity", interval: 18, dur: 1.0, pull: CONST.PLAYER_BASE_SPEED * 0.7 }, bgm: "void" }
   };
   const STAGE_ORDER = ["ruins", "crimson", "frozen", "void"];
 

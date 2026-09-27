@@ -101,14 +101,14 @@
     // 新融合的副伤害与主伤害使用同一伤害倍率,摘要展示的也是实际生效值。
     if (base.damage > 0) {
       const damageScale = s.damage / base.damage;
-      const secondary = ["gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "coreDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg"];
+      const secondary = ["gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "coreDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg", "splashDamage", "auraDamage"];
       for (let i = 0; i < secondary.length; i++) if (base[secondary[i]] != null) s[secondary[i]] = base[secondary[i]] * damageScale;
     }
     // 超频窗口：所有武器伤害×1.2，攻击间隔÷1.2。持续时间、控制时长和 DoT 跳频不改变。
     if (state.special === "overclocker" && state.overclockActive > 0) {
       const mech = characterDef(state).mechanics || {};
-      const damageKeys = ["damage", "dot", "explodeDmg", "gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "coreDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg"];
-      const intervalKeys = ["cooldown", "tick", "fireCd", "hitCd", "launchCd", "beamTick", "gridTick", "corridorTick", "fieldTick", "coreTick"];
+      const damageKeys = ["damage", "dot", "explodeDmg", "gridDmg", "bombDmg", "beamDmg", "launchDamage", "burstDmg", "fieldDmg", "coreDmg", "pelletDamage", "childDmg", "corridorDmg", "burn", "boomBase", "boomPer", "judgeDmg", "collideDmg", "hexDmg", "echoDmg", "chainDmg", "splashDamage", "auraDamage"];
+      const intervalKeys = ["cooldown", "tick", "fireCd", "hitCd", "launchCd", "beamTick", "gridTick", "corridorTick", "fieldTick", "coreTick", "bladeTick", "auraTick"];
       for (let i = 0; i < damageKeys.length; i++) if (s[damageKeys[i]] != null) s[damageKeys[i]] *= mech.damageMul || 1.2;
       for (let i = 0; i < intervalKeys.length; i++) if (s[intervalKeys[i]] != null) s[intervalKeys[i]] /= mech.frequencyMul || 1.2;
     }
@@ -1245,25 +1245,27 @@
       for (let i = 0; i < s.count; i++) blades.push({ angle: (w.angle || 0) + i / s.count * U.TAU, x: 0, y: 0 });
     }
     w.angle = (w.angle || 0) + s.spin * dt;
-    // 黑洞灼烧(aura 本体功能):周期对圈内全部敌人造成伤害
+    // 圆盘脉冲(aura 本体功能):周期对完整刃轨道内的敌人造成伤害。
     w.cd = (w.cd || 0) - dt;
     if (w.cd <= 0) {
-      w.cd = hardAttackInterval(state, 0.4);
+      w.cd = hardAttackInterval(state, s.auraTick);
       const disk = SV.Spatial.queryCircle(p.x, p.y, s.radius);
       for (let i = 0; i < disk.length; i++) {
         const e = disk[i];
-        if (e.hp > 0 && U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) dmgEnemy(e, s.damage * 0.6, w.id);
+        if (e.hp > 0 && U.dist2(p.x, p.y, e.x, e.y) <= s.radius * s.radius) dmgEnemy(e, s.auraDamage, w.id);
       }
     }
-    // 黑洞吸力:把圈外敌人吸进刃圈(途经刃刃受击),圈内由灼烧覆盖
-    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius * 1.3);
+    p.bladeAuraVisual = { radius: s.radius, pulse: 1 - Math.max(0, w.cd) / hardAttackInterval(state, s.auraTick), color: def.color };
+    // 吸力把敌人夹取到刃轨道内沿，既不会跨轨道，也不会因大 dt 越过停止点。
+    const stopRadius = s.radius * s.pullStopRatio;
+    const near = SV.Spatial.queryCircle(p.x, p.y, s.radius * s.pullRangeMul);
     for (let i = 0; i < near.length; i++) {
       const e = near[i];
       if (e.isBoss || e.hp <= 0) continue;
       const d = U.dist(e.x, e.y, p.x, p.y);
-      if (d > s.radius * 0.8) {
+      if (d > stopRadius) {
         const a = U.angleTo(e.x, e.y, p.x, p.y);
-        const f = Math.min(s.pull, d * 3) * (1 / 60);
+        const f = Math.min(Math.min(s.pull, d * 3) * dt, d - stopRadius);
         e.x += Math.cos(a) * f; e.y += Math.sin(a) * f;
       }
     }
@@ -1277,8 +1279,8 @@
         const e = nb[j];
         if (e.hp <= 0) continue;
         if (U.dist2(b.x, b.y, e.x, e.y) < (16 + e.r) * (16 + e.r) && e.bladeCd <= 0) {
-          dmgEnemy(e, s.damage, w.id); e.bladeCd = hardAttackInterval(state, 0.25);
-          splashAt(state, b.x, b.y, s.splash, s.damage * s.splashMul, def.color, 10, w.id);
+          dmgEnemy(e, s.damage, w.id); e.bladeCd = hardAttackInterval(state, s.bladeTick);
+          splashAt(state, b.x, b.y, s.splash, s.splashDamage, def.color, 10, w.id);
           SV.Effects.hit(b.x, b.y, def.color); SV.Audio.hit();
         }
       }

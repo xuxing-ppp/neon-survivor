@@ -11,7 +11,7 @@
 
   const Game = {
     state: null,
-    mode: "menu" // menu | select | charselect | weaponselect | playing | paused | levelup | endlessprompt | gameover | exited
+    mode: "menu" // menu | select | charselect | weaponselect | playing | paused | restartconfirm | levelup | endlessprompt | gameover | exited
   };
 
   let selStage = "ruins", selDiff = "normal", selChar = "bulwark", selStartWeapon = null;
@@ -104,6 +104,7 @@
     s.bossFlags = { count: 0, wraithEnrage: false };
     s._bossLoot = {};  // 多体 Boss 掉落去重(gid → 已掉过)
     s._bossGid = 0;    // 多体 Boss 组 id 计数(waves.spawnBoss 分配)
+    s._bossWaveGid = 0; // 后期/无尽 Boss 波奖励组 id
     s.hudAccum = 0;
     s.ended = false;
     SV.Entities.invalidateMods(s);    // 清跨局残留的 mods 缓存
@@ -152,7 +153,11 @@
     s.hudAccum = 0; s.ended = false; s._mods = null;
     // 旧存档没有绝对时间波次游标；已过的波次不在读档时补刷。
     if (!Number.isInteger(s.lateBossIndex)) s.lateBossIndex = C.LATE_BOSS_TIMES.filter(function (at) { return at <= s.time; }).length;
-    if (!Number.isFinite(s.endlessBossNext)) s.endlessBossNext = Math.max(21 * 60, (Math.floor(s.time / 60) + 1) * 60);
+    if (!Number.isFinite(s.endlessBossNext)) {
+      const elapsed = Math.max(0, s.time - C.ENDLESS_BOSS_FIRST);
+      s.endlessBossNext = C.ENDLESS_BOSS_FIRST + (Math.floor(elapsed / C.ENDLESS_BOSS_EVERY) + (s.time >= C.ENDLESS_BOSS_FIRST ? 1 : 0)) * C.ENDLESS_BOSS_EVERY;
+    }
+    if (!Number.isFinite(s._bossWaveGid)) s._bossWaveGid = 0;
     if (!s.player.blades) s.player.blades = [];
     if (!s.player.sentries) s.player.sentries = [];
     SV.Weapons.restoreRuntime(s, save.runtime);
@@ -239,6 +244,18 @@
       SV.Menus.populatePause(Game.state); SV.Menus.show("pause");
     }
     else if (Game.mode === "paused") { Game.mode = "playing"; SV.Menus.hideAll(); }
+  }
+
+  function openRestartConfirm() {
+    if (Game.mode !== "paused") return;
+    Game.mode = "restartconfirm";
+    SV.Menus.show("restartconfirm");
+  }
+  function cancelRestart() {
+    if (Game.mode !== "restartconfirm") return;
+    Game.mode = "paused";
+    SV.Menus.populatePause(Game.state);
+    SV.Menus.show("pause");
   }
 
   // ── 升级流程
@@ -331,7 +348,9 @@
     else if (act === "beginRun") startRun(true);
     else if (act === "endlessYes") enterEndless();
     else if (act === "endlessNo") endRun(true);
-    else if (act === "restart") startRun(true);
+    else if (act === "restart") { if (Game.mode === "paused") openRestartConfirm(); else startRun(true); }
+    else if (act === "confirmRestart") { if (Game.mode === "restartconfirm") startRun(true); }
+    else if (act === "cancelRestart") cancelRestart();
     else if (act === "pause" || act === "resume") togglePause();
     else if (act === "saveExit") saveAndExit();
     else if (act === "exitGame") exitGame();
@@ -389,6 +408,7 @@
   function handleInputs() {
     if (SV.Input.consumePause()) {
       if (Game.mode === "playing" || Game.mode === "paused") togglePause();
+      else if (Game.mode === "restartconfirm") cancelRestart();
     }
     if (SV.Input.consumeMute()) { const m = !SV.Audio.isMuted(); SV.Audio.setMuted(m); SV.Menus.setSoundToggle(m); }
     if (SV.Input.consumeConfirm()) {

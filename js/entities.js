@@ -88,7 +88,7 @@
       hp: C.PLAYER_BASE_HP, maxHp: C.PLAYER_BASE_HP,
       speed: C.PLAYER_BASE_SPEED,
       facing: 0,
-      iframes: 0, flash: 0,
+      iframes: 0, eshotIframe: 0, flash: 0,
       pickupRadius: C.PICKUP_RADIUS,
       regenAcc: 0, lsWindow: 0,
       bulwarkCd: 0,
@@ -101,26 +101,34 @@
   function diffOf(state) { return SV.Config.DIFFICULTY[state.difficulty] || SV.Config.DIFFICULTY.normal; }
 
   // 无尽模式额外倍率(通关后随超时分钟增长)
-  function endlessMulOf(state) {
-    if (state.endless && state.stage) return CU.endlessMul(Math.max(0, (state.time - state.stage.goalMin) / 60));
+  function endlessHpMulOf(state) {
+    if (state.endless && state.stage) return CU.endlessHpMul(Math.max(0, (state.time - state.stage.goalMin) / 60));
+    return 1;
+  }
+  function endlessDmgMulOf(state) {
+    if (state.endless && state.stage) return CU.endlessDmgMul(Math.max(0, (state.time - state.stage.goalMin) / 60));
     return 1;
   }
 
   // 敌人回血速率随时间成长,与 makeEnemy 的 maxHP 同因子(hpFactor × diff × endless)。
   // 用于血祭司光环/自愈者自回血,使其后期相对暴涨的敌血仍保持存在感。
-  function healScaleOf(state) { const t = (state.time || 0) / 60; return CU.hpFactor(t) * diffOf(state).hpMul * endlessMulOf(state); }
+  function healScaleOf(state) { const t = (state.time || 0) / 60; return CU.hpFactor(t) * diffOf(state).hpMul * endlessHpMulOf(state); }
   function healthDropLateFactor(state) {
     const t = (state.time || 0) / 60;
     return t <= 10 ? 1 : 1 / (1 + 0.15 * (t - 10));
+  }
+  function eliteHealthDropLateFactor(state) {
+    const t = (state.time || 0) / 60;
+    return t <= 10 ? 1 : 1 / (1 + 0.30 * (t - 10));
   }
 
   function makeEnemy(state, type, x, y) {
     const def = EN[type];
     const t = state.time / 60;
     const diff = diffOf(state);
-    const em = endlessMulOf(state);
+    const hpEm = endlessHpMulOf(state), dmgEm = endlessDmgMulOf(state);
     const df = CU.dmgFactor(t);
-    const hp = def.hp * CU.hpFactor(t) * diff.hpMul * em;
+    const hp = def.hp * CU.hpFactor(t) * diff.hpMul * hpEm;
     return {
       id: _id++, type: type, color: def.color, ai: def.ai,
       x: x, y: y, vx: 0, vy: 0,
@@ -128,15 +136,15 @@
       hp: hp, maxHp: hp,
       speed: def.speed * CU.speedFactor(t) * ((state.charMods && state.charMods.enemySpeedMul) || 1),
       // 自爆虫:接触不直接造成伤害,只在爆炸时造成 AOE
-      dmg: type === "bomber" ? 0 : def.dmg * diff.dmgMul * em * df,
-      boomDmg: type === "bomber" ? def.dmg * diff.dmgMul * em * df : 0,
-      xp: Math.max(1, Math.round(def.xp * 1.5 * diff.xpMul / CU.earlySpawnFactor(t, state.difficulty))), projDmg: (def.projDmg || 0) * diff.dmgMul * df * em, aoe: def.aoe || 0,
+      dmg: type === "bomber" ? 0 : def.dmg * diff.dmgMul * dmgEm * df,
+      boomDmg: type === "bomber" ? def.dmg * diff.dmgMul * dmgEm * df : 0,
+      xp: Math.max(1, Math.round(def.xp * 1.5 * diff.xpMul / CU.earlySpawnFactor(t, state.difficulty))), projDmg: (def.projDmg || 0) * diff.dmgMul * df * dmgEm, aoe: def.aoe || 0,
       dr: def.dr || 0, regenRate: def.regenRate || 0,
       shape: def.shape || "circle", shimmer: !!def.shimmer,
       auraR: def.auraR || 0, auraDr: def.auraDr || 0, healRate: def.healRate || 0, auraSpeed: def.auraSpeed || 0,
       stealth: !!def.stealth, burstCount: def.burstCount || 0, burstType: def.burstType || "swarmer",
       trailInterval: def.trailInterval || 0, trailDur: def.trailDur || 0,
-      trailDmg: (def.trailDmg || 0) * diff.dmgMul * df * em,
+      trailDmg: (def.trailDmg || 0) * diff.dmgMul * df * dmgEm,
       revealed: false, _shieldedByAura: false, _shieldDr: 0, _speedBuff: 1, _speedBuffT: 0,
       flash: 0, slow: 0, slowF: 0, frozen: 0, bladeCd: 0,
       poison: 0, poisonDmg: 0, poisonTick: 0, poisonWid: "", poisonHexCut: 0,
@@ -153,14 +161,14 @@
     const def = BOSSES[bossType];
     const t = state.time / 60;
     const diff = diffOf(state);
-    const em = endlessMulOf(state);
+    const hpEm = endlessHpMulOf(state), dmgEm = endlessDmgMulOf(state);
     // Boss 用独立分档乘子(bossHpMul/bossDmgMul):整体上调且档差压缩,不随普通敌 dmgMul/hpMul
-    const hp = def.hp * (1 + 0.20 * t + 0.006 * t * t) * (diff.bossHpMul || diff.hpMul) * em;
+    const hp = def.hp * CU.bossHpFactor(t) * (diff.bossHpMul || diff.hpMul) * hpEm;
     return Object.assign(makeEnemy(state, "brute", x, y), {
       id: _id++, type: bossType, color: def.color, ai: "boss", shape: def.shape || "circle",
       r: def.r, mass: 40,
       hp: hp, maxHp: hp,
-      speed: def.speed, dmg: def.dmg * (diff.bossDmgMul || diff.dmgMul) * em * CU.dmgFactor(t) * (def.tier === 3 ? C.T3_BOSS_DAMAGE_MUL : 1), xp: def.xp,
+      speed: def.speed, dmg: def.dmg * (diff.bossDmgMul || diff.dmgMul) * dmgEm * CU.dmgFactor(t) * (def.tier === 3 ? C.T3_BOSS_DAMAGE_MUL : 1), xp: def.xp,
       bossType: bossType, isBoss: true, enrage: false,
       t1: U.rand(1, 3), t2: U.rand(2, 4), ct: 0, cdir: U.rand(0, U.TAU)
     });
@@ -495,25 +503,28 @@
     state.kills++;
     // 经验宝石
     if (e.isBoss) {
-      // Boss:散落多颗高价值宝石 + 必掉宝箱与血包。
-      // 多体 Boss(双生怨灵/镜像双子,e.gid 同组):整组只由最后死亡者掉一份(同帧双杀按先结算者,也只一份)
+      // 单 Boss/多体 Boss/周期 Boss 波均只由组内最后死亡者掉宝箱与宝石。
       let dropReward = true;
-      if (e.gid) {
+      const rewardGroup = e.lootGroup || e.gid;
+      if (rewardGroup) {
         let mateAlive = false;
         for (let i = 0; i < state.enemies.length; i++) {
           const o = state.enemies[i];
-          if (o !== e && o.isBoss && o.gid === e.gid && o.hp > 0) { mateAlive = true; break; }
+          const sameGroup = e.lootGroup ? o.lootGroup === e.lootGroup : (!o.lootGroup && o.gid === e.gid);
+          if (o !== e && o.isBoss && sameGroup && o.hp > 0) { mateAlive = true; break; }
         }
         if (!state._bossLoot) state._bossLoot = {};
-        dropReward = !mateAlive && !state._bossLoot[e.gid];
-        if (dropReward) state._bossLoot[e.gid] = true;
+        const rewardKey = (e.lootGroup ? "wave:" : "multi:") + rewardGroup;
+        dropReward = !mateAlive && !state._bossLoot[rewardKey];
+        if (dropReward) state._bossLoot[rewardKey] = true;
       }
+      const periodic = e.bossSource === "late" || e.bossSource === "endless";
       if (dropReward) {
         for (let i = 0; i < 8; i++) { const a = U.rand(0, U.TAU), d = U.rand(10, 50); state.gems.push(makeGem(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, Math.max(1, Math.round(e.xp / 8)))); }
-        if (!state.endless) state.pickups.push(makePickup(e.x, e.y, "treasure")); // 无尽模式 Boss 不掉宝箱
-        const periodic = e.bossSource === "late" || e.bossSource === "endless";
-        if (!periodic || Math.random() < healthDropLateFactor(state)) state.pickups.push(makePickup(e.x + 30, e.y, "health"));
+        if (!state.endless || periodic) state.pickups.push(makePickup(e.x, e.y, "treasure"));
       }
+      // 周期 Boss 波中每个成员仅有衰减后的血包概率；剧情 Boss 的最终结算者仍必掉血包。
+      if ((periodic && Math.random() < healthDropLateFactor(state)) || (!periodic && dropReward)) state.pickups.push(makePickup(e.x + 30, e.y, "health"));
       SV.Effects.shake(12, 0.5);
       if (e.bossType === "wraith") {
         state.bossFlags.wraithEnrage = true;
@@ -540,7 +551,7 @@
         const luckF = 1 + mods(state).luck;
         const eDf = 1 / (1 + 0.25 * Math.max(0, state.time / 60 - 8));
         const eMul = diffOf(state).dropMul;
-        if (Math.random() < 0.20 * eMul * eDf * luckF * healthDropLateFactor(state)) state.pickups.push(makePickup(e.x, e.y, "health"));
+        if (Math.random() < 0.20 * eMul * eDf * luckF * eliteHealthDropLateFactor(state)) state.pickups.push(makePickup(e.x, e.y, "health"));
         if (Math.random() < 0.10 * eMul * eDf * luckF) state.pickups.push(makePickup(e.x, e.y, "magnet"));
         SV.Effects.explosion(e.x, e.y, SV.Config.COLORS.gold, 22);
       } else {
@@ -634,6 +645,7 @@
     if (p.y < -half) p.y = -half; else if (p.y > half) p.y = half;
 
     if (p.iframes > 0) p.iframes -= dt;
+    if ((p.eshotIframe || 0) > 0) p.eshotIframe -= dt;
     if (p.slow > 0) p.slow -= dt;
     if (p.flash > 0) p.flash -= dt;
     // 吸血每秒上限的预算衰减
@@ -883,7 +895,10 @@
       const fracture = state.timeFractureActive > 0 ? (s.boss ? (fractureMech.bossScale || 0.70) : (fractureMech.normalScale || 0.35)) : 1;
       s.x += s.vx * dt * fracture; s.y += s.vy * dt * fracture; s.life -= dt * fracture;
       const rr = s.r + p.r;
-        if (U.dist2(s.x, s.y, p.x, p.y) < rr * rr) { damagePlayer(state, s.dmg, true, s.srcType || null); es.splice(i, 1); continue; }
+      if (U.dist2(s.x, s.y, p.x, p.y) < rr * rr) {
+        if (!(p.eshotIframe > 0)) { damagePlayer(state, s.dmg, true, s.srcType || null); p.eshotIframe = C.ESHOT_IFRAME; }
+        es.splice(i, 1); continue;
+      }
       if (s.life <= 0) es.splice(i, 1);
     }
 
@@ -973,6 +988,7 @@
     tid: tid,
     healScale: healScaleOf,
     healthDropLateFactor: healthDropLateFactor,
+    eliteHealthDropLateFactor: eliteHealthDropLateFactor,
     previewEnemy: previewEnemy,
     previewBoss: previewBoss,
     enemyFullyInside: enemyFullyInside,

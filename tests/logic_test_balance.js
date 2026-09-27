@@ -17,7 +17,9 @@ function load(file) { vm.runInContext(fs.readFileSync(path.join(root, 'js', file
 load('util.js'); load('config.js');
 const SV = ctx.SV, C = SV.Config.CONST, W = SV.Config.WEAPONS;
 assert.equal(C.HEALTH_PULL_RADIUS, C.PICKUP_RADIUS);
-assert.deepEqual(Array.from(C.LATE_BOSS_TIMES), [990, 1080, 1170]);
+assert.deepEqual(Array.from(C.LATE_BOSS_TIMES), [930, 1050, 1140]);
+assert.equal(C.ENDLESS_BOSS_FIRST, 1230);
+assert.equal(C.ENDLESS_BOSS_EVERY, 90);
 assert.equal(C.BOSS_AIM_LEAD_FACTOR, 0.45);
 assert.equal(C.BOSS_AIM_LEAD_MAX_TIME, 0.45);
 assert.equal(C.BOSS_AIM_LEAD_MAX_DIST, 90);
@@ -39,7 +41,7 @@ for (const id of Object.keys(W)) {
 }
 assert.equal(Object.values(SV.Config.BOSSES).filter(b => b.tier === 1).length, 6);
 assert.equal(Object.values(SV.Config.BOSSES).filter(b => b.tier === 3).length, 6);
-const expectedT1Hp = { duke: 980, scavenger: 875, frostwarden: 1035, bloodhunter: 900, riftsentry: 990, thornwarden: 1000 };
+const expectedT1Hp = { duke: 980, scavenger: 875, frostwarden: 1035, bloodhunter: 900, riftsentry: 990, thornwarden: 1200 };
 for (const [id, def] of Object.entries(SV.Config.BOSSES).filter(([, b]) => b.tier === 1)) {
   const scale = SV.Config.DIFFICULTY.normal.bossDmgMul * SV.Config.CURVES.dmgFactor(5);
   assert(def.dmg * scale <= 36, `${id} T1 normal contact damage`);
@@ -51,16 +53,53 @@ for (const [id, def] of Object.entries(SV.Config.BOSSES).filter(([, b]) => b.tie
   assert.equal(def.hp, expectedT1Hp[id], `${id} T1 reinforced base HP`);
   if (def.mechanics && def.mechanics.warn) assert(def.mechanics.warn >= 0.7, `${id} readable T1 warning`);
 }
-assert.deepEqual(Array.from(SV.Config.BOSSES.duke.attacks.projectile), [10]);
+const oldHpFactor = t => 1.2 + 0.22 * t + 0.012 * t * t + 0.0004 * t * t * t;
+const oldBossHpFactor = t => 1 + 0.2 * t + 0.006 * t * t;
+const oldEndlessMul = o => 1 + 0.22 * o + 0.01 * o * o;
+const near = (actual, expected, label) => assert(Math.abs(actual - expected) < 1e-9, `${label}: ${actual}`);
+near(SV.Config.CURVES.hpFactor(5) / oldHpFactor(5), 1.30, '5m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(13.5) / oldHpFactor(13.5), 1.90, '13.5m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(18) / oldHpFactor(18), 2.15, '18m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(20) / oldHpFactor(20), 2.25, '20m enemy HP ratio');
+near(SV.Config.CURVES.bossHpFactor(5) / oldBossHpFactor(5), 2.00, '5m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(9.5) / oldBossHpFactor(9.5), 2.50, '9.5m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(13.5) / oldBossHpFactor(13.5), 2.90, '13.5m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(18) / oldBossHpFactor(18), 3.00, '18m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(20) / oldBossHpFactor(20), 3.10, '20m Boss HP ratio');
+const enemy25Ratio = SV.Config.CURVES.hpFactor(25) * SV.Config.CURVES.endlessHpMul(5) / (oldHpFactor(25) * oldEndlessMul(5));
+near(enemy25Ratio, 2.55, '25m endless enemy HP versus old curve');
+const boss25Ratio = SV.Config.CURVES.bossHpFactor(25) * SV.Config.CURVES.endlessHpMul(5) / (oldBossHpFactor(25) * oldEndlessMul(5));
+assert(Math.abs(boss25Ratio - 3.42) < 0.01, '25m endless Boss HP is about 3.42× the old curve');
+near(SV.Config.CURVES.dmgFactor(13.5), 1.75, '13.5m damage factor');
+near(SV.Config.CURVES.dmgFactor(18), 2.05, '18m damage factor');
+near(SV.Config.CURVES.dmgFactor(20), 2.20, '20m damage factor');
+near(SV.Config.CURVES.dmgFactor(25) * SV.Config.CURVES.endlessDmgMul(5), 3.24, '25m endless damage factor');
+for (let t = 9.5, prev = 0; t <= 30; t += 0.25) {
+  const values = [SV.Config.CURVES.hpFactor(t), SV.Config.CURVES.bossHpFactor(t), SV.Config.CURVES.dmgFactor(t)];
+  assert(values.every(Number.isFinite), `late curves finite at ${t}m`);
+  if (prev) assert(values.every((v, i) => v >= prev[i]), `late curves monotonic at ${t}m`);
+  prev = values;
+}
+const maxT3Contact18 = Math.max(...Object.values(SV.Config.BOSSES).filter(b => b.tier === 3).map(b => b.dmg))
+  * SV.Config.DIFFICULTY.normal.bossDmgMul * C.T3_BOSS_DAMAGE_MUL
+  * SV.Config.CURVES.dmgFactor(18);
+assert(maxT3Contact18 < C.PLAYER_BASE_HP, 'normal 18m T3 Boss contact does not one-shot base HP');
+const plague = SV.Config.WEAPON_EVOS.hex_poison.stats(8);
+assert.deepEqual({ damage: plague.damage, frac: plague.frac, dot: plague.dot, dotDur: plague.dotDur }, { damage: 30, frac: 0.15, dot: 32, dotDur: 3.5 });
+assert.deepEqual(Array.from(SV.Config.BOSSES.duke.attacks.projectile), [10, 10]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.scavenger.attacks.projectile), [10]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.frostwarden.attacks.projectile), [9]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.bloodhunter.attacks.projectile), [9]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.riftsentry.attacks.projectile), [8, 9]);
 assert.deepEqual(Array.from(SV.Config.BOSSES.thornwarden.attacks.projectile), [9]);
 assert.equal(SV.Config.BOSSES.wraith.tier, 2);
-assert.equal(SV.Config.BOSSES.wraith.hp, 800);
+assert.equal(SV.Config.BOSSES.wraith.hp, 736);
 assert.equal(SV.Config.BOSSES.wraith.dmg, 15);
-assert.deepEqual(Array.from(SV.Config.BOSSES.wraith.attacks.projectile), [13]);
+assert.deepEqual(Array.from(SV.Config.BOSSES.wraith.attacks.projectile), [11]);
+assert.deepEqual(Object.assign({}, SV.Config.BOSSES.wraith.mechanics), { orbitRadius: 250, orbitRate: 1.3, attackInterval: 2.1, shotSpeed: 260, enragedOrbitMul: 1.6, enragedInterval: 1.2, enrageRingInterval: 5, enrageRingShots: 6, enrageRingSpeed: 190 });
+const annihilation = SV.Config.WEAPON_EVOS.blade_aura.stats(8);
+assert.deepEqual({ damage: annihilation.damage, bladeTick: annihilation.bladeTick, splash: annihilation.splash, splashDamage: annihilation.splashDamage, auraDamage: annihilation.auraDamage, auraTick: annihilation.auraTick, pullRangeMul: annihilation.pullRangeMul, pullStopRatio: annihilation.pullStopRatio }, { damage: 46.2, bladeTick: 0.25, splash: 26, splashDamage: 27.72, auraDamage: 27.72, auraTick: 0.4, pullRangeMul: 1.3, pullStopRatio: 0.96 });
+assert(annihilation.radius >= 201 && annihilation.radius <= 203, 'annihilation disk radius stays about 202');
 let previousBossDifficulty = null;
 for (const id of SV.Config.DIFFICULTY_ORDER) {
   const d = SV.Config.DIFFICULTY[id];
@@ -72,7 +111,7 @@ for (const tier of [1, 2, 3]) {
   const groupHp = Object.values(SV.Config.BOSSES).filter(b => b.tier === tier).map(b => b.hp * (b.count || 1));
   assert(Math.max(...groupHp) / Math.min(...groupHp) < 1.7, `T${tier} group HP has no extreme outlier`);
 }
-const firstBossMinute = { 1: 5, 2: 10, 3: 14 };
+const firstBossMinute = { 1: 5, 2: 9.5, 3: 13.5 };
 for (const [bossId, def] of Object.entries(SV.Config.BOSSES)) {
   for (const difficultyId of SV.Config.DIFFICULTY_ORDER) {
     const difficulty = SV.Config.DIFFICULTY[difficultyId], minute = firstBossMinute[def.tier];
@@ -88,7 +127,7 @@ for (const stage of Object.values(SV.Config.STAGES)) {
   tierOnePools.add(stage.bosses[0][0].join(','));
   for (let tier = 1; tier <= 3; tier++) {
     const [pool, time] = stage.bosses[tier - 1];
-    assert.equal(time, [300, 600, 840][tier - 1]);
+    assert.equal(time, [300, 570, 810][tier - 1]);
     assert(pool.length >= 2);
     for (const id of pool) assert.equal(SV.Config.BOSSES[id].tier, tier, id);
   }
@@ -105,11 +144,11 @@ for (let a = 0; a < maps.length; a++) for (let b = a + 1; b < maps.length; b++) 
 const newBosses = ['scavenger', 'frostwarden', 'bloodhunter', 'riftsentry', 'thornwarden', 'stormherald', 'bloodoracle', 'furnace', 'voidseer', 'eclipseeye'];
 for (const id of newBosses) assert(SV.Config.BOSSES[id]);
 
-const spawns = [];
+const spawns = [], spawnedBosses = [];
 SV.Util.choice = arr => arr[0];
 SV.Util.randInt = () => 2;
 SV.Renderer = { cssSize: () => ({ w: 800, h: 500 }), cam: { zoom: 1 } };
-SV.Entities = { addBoss(_s, id) { spawns.push(id); return { id }; }, addEnemy() {} };
+SV.Entities = { addBoss(_s, id) { const e = { id }; spawns.push(id); spawnedBosses.push(e); return e; }, addEnemy() {} };
 SV.Audio = { bossWarn() {} };
 SV.Effects = { shake() {} };
 SV.HUD = { toast() {} };
@@ -118,16 +157,16 @@ const state = { player: { x: 0, y: 0 }, stage: SV.Config.STAGES.ruins, difficult
 SV.Waves.reset(state);
 function at(time, endless = false) { state.time = time; state.endless = endless; SV.Waves.update(state, 1 / 60); }
 at(300); assert.equal(spawns.length, 1);
-at(600); assert.equal(spawns.length, 3); // 第一候选双生怨灵为双体 Boss
-at(840); assert.equal(spawns.length, 4);
-at(989); assert.equal(spawns.length, 4);
-at(990); assert(spawns.length >= 6 && spawns.length <= 7); let n = spawns.length;
-at(1079); assert.equal(spawns.length, n);
-at(1080); assert(spawns.length >= n + 2 && spawns.length <= n + 3); n = spawns.length;
-at(1170); assert(spawns.length >= n + 2 && spawns.length <= n + 3); n = spawns.length;
+at(570); assert.equal(spawns.length, 3); // 第一候选双生怨灵为双体 Boss
+at(810); assert.equal(spawns.length, 4);
+at(929); assert.equal(spawns.length, 4);
+at(930); assert(spawns.length >= 6 && spawns.length <= 7); assert.equal(new Set(spawnedBosses.slice(-2).map(e => e.lootGroup)).size, 1, 'late wave shares one loot group'); let n = spawns.length;
+at(1049); assert.equal(spawns.length, n);
+at(1050); assert(spawns.length >= n + 2 && spawns.length <= n + 3); n = spawns.length;
+at(1140); assert(spawns.length >= n + 2 && spawns.length <= n + 3); n = spawns.length;
 at(1200, true); assert.equal(spawns.length, n);
-at(1259, true); assert.equal(spawns.length, n);
-at(1260, true); assert(spawns.length >= n + 1 && spawns.length <= n + 3); n = spawns.length;
+at(1229, true); assert.equal(spawns.length, n);
+at(1230, true); assert(spawns.length >= n + 2 && spawns.length <= n + 3); assert.equal(new Set(spawnedBosses.slice(-2).map(e => e.lootGroup)).size, 1, 'endless wave shares one loot group'); n = spawns.length;
 at(1319, true); assert.equal(spawns.length, n);
 at(1320, true); assert(spawns.length > n);
 
@@ -140,32 +179,47 @@ for (const stage of Object.values(SV.Config.STAGES)) {
   const mapState = { player: { x: 0, y: 0 }, stage, difficulty: 'normal', enemies: [], time: 0, endless: false, charMods: {}, _bossLoot: {} };
   SV.Waves.reset(mapState);
   const from = spawns.length;
-  mapState.time = 1170;
+  mapState.time = 1140;
   SV.Waves.update(mapState, 1 / 60);
   const late = spawns.slice(from);
   assert(late.length >= 6, `${stage.name} late waves spawn`);
   assert(late.every(id => allowed.has(id)), `${stage.name} late waves stay in map pool`);
   const endlessFrom = spawns.length;
-  mapState.endless = true; mapState.time = 1260;
+  mapState.endless = true; mapState.time = 1230;
   SV.Waves.update(mapState, 1 / 60);
   assert(spawns.slice(endlessFrom).every(id => allowed.has(id)), `${stage.name} endless waves stay in map pool`);
 }
 
 // Each new Boss must execute its AI branch without throwing or emitting invalid shots.
-const shots = [];
+const shots = [], playerHits = [];
 SV.Entities.canEnemyRanged = () => true;
 SV.Entities.addEShot = (_s, x, y, vx, vy, dmg, _color, _r, srcType) => shots.push({ x, y, vx, vy, dmg, srcType });
 let mockEnemyId = 10000;
-SV.Entities.addEnemy = (s, _type, x, y) => { const o = { id: mockEnemyId++, x, y, hp: 1, r: 14 }; s.enemies.push(o); return o; };
-SV.Entities.damagePlayer = () => {};
+SV.Entities.addEnemy = (s, type, x, y) => {
+  const def = SV.Config.ENEMIES[type];
+  const o = { id: mockEnemyId++, type, ai: def.ai, x, y, hp: 1, r: def.r, speed: def.speed, projDmg: def.projDmg, color: def.color, t1: 0, t2: 0, cstate: 'walk', cdir: 0, vx: 0, vy: 0 };
+  s.enemies.push(o); return o;
+};
+SV.Entities.damagePlayer = (_s, dmg, _ignore, srcType) => playerHits.push({ dmg, srcType });
 SV.Effects.hit = () => {}; SV.Effects.ring = () => {};
+SV.Weapons = { beams: [] };
 SV.Game = { state: { player: { x: 0, y: 0, r: 14 }, enemies: [], eshots: [], hazards: [], time: 600, difficulty: 'normal', endless: false, stage: SV.Config.STAGES.ruins } };
 load('ai.js');
 {
   const sniper = { ai: 'sniper', x: 300, y: 0, speed: 60, projDmg: 11, color: '#fff', t1: 0, vx: 0, vy: 0 };
   shots.length = 0;
   SV.AI.update(SV.Game.state, sniper, 1 / 60);
+  assert.equal(sniper.cstate, 'sniper_warn'); assert.equal(shots.length, 0, 'sniper warns before firing');
+  for (let i = 0; i < Math.ceil(SV.Config.ENEMIES.sniper.shotWarn * 60) + 1; i++) SV.AI.update(SV.Game.state, sniper, 1 / 60);
   assert.equal(Math.hypot(shots[0].vx, shots[0].vy), 380, 'sniper projectile speed');
+}
+{
+  const shooter = { ai: 'shooter', type: 'shooter', x: 300, y: 0, speed: 70, projDmg: 8, color: '#fff', t1: 0, vx: 0, vy: 0 };
+  shots.length = 0;
+  SV.AI.update(SV.Game.state, shooter, 1 / 60);
+  assert.equal(shooter.cstate, 'shot_warn'); assert.equal(shots.length, 0, 'gunner warns before firing');
+  for (let i = 0; i < Math.ceil(SV.Config.ENEMIES.shooter.shotWarn * 60) + 1; i++) SV.AI.update(SV.Game.state, shooter, 1 / 60);
+  assert.equal(shots.length, 1, 'gunner fires after warning');
 }
 for (const id of newBosses) {
   const def = SV.Config.BOSSES[id];
@@ -184,7 +238,7 @@ assert(SV.Game.state.hazards.some(h => h.srcType === 'furnace'), 'furnace hazard
 function signatureBoss(id) {
   const def = SV.Config.BOSSES[id];
   const boss = { bossType: id, ai: 'boss', x: 160, y: 0, r: def.r, speed: def.speed, t1: 0, t2: 99, ct: 0, cdir: 0, cstate: 'walk', color: def.color, hp: 100 };
-  SV.Game.state.enemies = [boss]; shots.length = 0;
+  SV.Game.state.enemies = [boss]; shots.length = 0; playerHits.length = 0; SV.Weapons.beams.length = 0;
   return boss;
 }
 function frames(boss, count) { for (let i = 0; i < count; i++) SV.AI.update(SV.Game.state, boss, 1 / 60); }
@@ -199,10 +253,18 @@ assert.equal(shots.length, SV.Config.BOSSES.scavenger.mechanics.exitShots);
 assertShotSpeed(220, 'scavenger exit fan');
 sig = signatureBoss('frostwarden');
 frames(sig, 1); assert.equal(sig.cstate, 'ice_warn'); assert.equal(shots.length, 0);
-frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.warn * 60) + 1); assert.equal(shots.length, 2); assert.equal(sig.cstate, 'ice_follow');
-assertShotSpeed(180, 'frostwarden flank');
-frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.follow * 60) + 1); assert.equal(shots.length, 3); assert.equal(sig.cstate, 'walk');
-assert(Math.abs(Math.hypot(shots[2].vx, shots[2].vy) - 195) < 1e-6, 'frostwarden center projectile speed');
+frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.warn * 60) + 1); assert.equal(shots.length, 0); assert.equal(sig.cstate, 'ice_beam');
+SV.Game.state.player.x = sig.x + Math.cos(sig.cdir - SV.Config.BOSSES.frostwarden.mechanics.flankAngle) * 200;
+SV.Game.state.player.y = sig.y + Math.sin(sig.cdir - SV.Config.BOSSES.frostwarden.mechanics.flankAngle) * 200;
+frames(sig, 1); assert(playerHits.some(h => h.srcType === 'frostwarden'), 'frostwarden laser damages along its warned line');
+frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.beamDuration * 60) + 1);
+assert(SV.Weapons.beams.length >= 2, 'frostwarden emits paired laser visuals');
+assert.equal(shots.length, 0, 'frostwarden replaces sparse flank projectiles with lasers');
+assert.equal(sig.cstate, 'ice_follow');
+frames(sig, Math.ceil(SV.Config.BOSSES.frostwarden.mechanics.follow * 60) + 1); assert.equal(shots.length, 1); assert.equal(sig.cstate, 'walk');
+assert(Math.abs(Math.hypot(shots[0].vx, shots[0].vy) - 195) < 1e-6, 'frostwarden center projectile speed');
+assert(SV.Config.BOSSES.frostwarden.attacks.laser[0] < SV.Config.BOSSES.frostwarden.attacks.projectile[0], 'frostwarden laser is low-damage space control');
+SV.Game.state.player.x = 0; SV.Game.state.player.y = 0;
 
 sig = signatureBoss('bloodhunter');
 frames(sig, 1); assert.equal(sig.cstate, 'blood_mark'); assert.equal(shots.length, 0);
@@ -227,9 +289,11 @@ frames(sig, Math.ceil(SV.Config.BOSSES.thornwarden.mechanics.warn * 60) + 1); as
 assertShotSpeed(215, 'thornwarden fan');
 
 sig = signatureBoss('stormherald');
-frames(sig, 1); assert.equal(sig.cstate, 'storm_sweep'); assert.equal(shots.length, 0);
-frames(sig, 64); assert(shots.length >= 7 && shots.length <= 9);
+SV.Game.state.player.vx = 0; SV.Game.state.player.vy = 180;
+frames(sig, 1); assert.equal(sig.cstate, 'storm_warn'); assert.equal(sig.sweepDir, -1); assert.equal(shots.length, 0);
+frames(sig, Math.ceil(SV.Config.BOSSES.stormherald.mechanics.warn * 60) + 64); assert(shots.length >= 7 && shots.length <= 9);
 assert(new Set(shots.map(s => Math.atan2(s.vy, s.vx).toFixed(2))).size > 2, 'stormherald sweeps angles');
+SV.Game.state.player.vx = 0; SV.Game.state.player.vy = 0;
 
 sig = signatureBoss('bloodoracle');
 sig.t1 = 99; sig.t2 = 0;
@@ -240,9 +304,24 @@ SV.Game.state.enemies.find(e => e.id === sig.ritualMinionIds[0]).hp = 0;
 frames(sig, 49); assert.equal(shots.length, 3, 'killing a ritual follower removes its volley');
 
 sig = signatureBoss('magnetwarper'); sig.t2 = 99;
-frames(sig, 1); assert.equal(sig.cstate, 'pull'); assert.equal(shots.length, 12, 'magnetwarper opens with a pull ring');
+frames(sig, 1); assert.equal(sig.cstate, 'pull_warn'); assert.equal(shots.length, 0, 'magnetwarper warns before pulling');
+frames(sig, Math.ceil(SV.Config.BOSSES.magnetwarper.mechanics.pullWarn * 60) + 1);
+assert.equal(sig.cstate, 'pull'); assert.equal(shots.length, 12, 'magnetwarper opens with a pull ring after warning');
 frames(sig, Math.ceil(SV.Config.BOSSES.magnetwarper.mechanics.pullDuration * 60) + 1);
 assert.equal(shots.length, 20, 'magnetwarper releases a second ring after the pull');
+
+sig = signatureBoss('architect'); sig.t1 = 99; sig.t2 = 99; sig.t3 = 0;
+frames(sig, 1); assert.equal(sig.cstate, 'architect_warn'); assert.equal(shots.length, 0, 'architect offset barrage is warned');
+frames(sig, Math.ceil(SV.Config.BOSSES.architect.mechanics.offsetWarn * 60) + 1);
+assert.equal(shots.length, SV.Config.BOSSES.architect.mechanics.offsetShots * 2, 'architect fires paired offset rings after warning');
+assert.equal(new Set(shots.map(s => `${s.x},${s.y}`)).size, 2, 'architect offset rings use two readable origins');
+
+sig = signatureBoss('inquisitor'); sig.t2 = 99;
+const inquisitorStart = [sig.x, sig.y];
+frames(sig, 1); assert.equal(sig.cstate, 'judge_warn'); assert.equal(shots.length, 0, 'inquisitor warns before teleporting');
+assert.deepEqual([sig.x, sig.y], inquisitorStart, 'inquisitor remains at origin during warning');
+frames(sig, Math.ceil(SV.Config.BOSSES.inquisitor.mechanics.teleportWarn * 60) + 1);
+assert.equal(shots.length, SV.Config.BOSSES.inquisitor.mechanics.ringShots + SV.Config.BOSSES.inquisitor.mechanics.arrivalShots, 'inquisitor fires origin and arrival rings after warning');
 
 SV.Game.state.hazards = [];
 sig = signatureBoss('furnace'); sig.t1 = 99; sig.t2 = 0;
@@ -277,8 +356,13 @@ sig = signatureBoss('voidseer'); sig.t1 = 99; sig.t2 = 0;
 frames(sig, 1); assert(Math.abs(shots[1].vy) < 1e-9 && shots[1].vx < 0, 'T3 prediction falls back to current aim when player is still');
 
 sig = signatureBoss('wraith'); sig.enrage = true; sig.t1 = 99; sig.t3 = 0;
-frames(sig, 1); assert.equal(shots.length, 8, 'enraged wraith adds a radial barrage');
+frames(sig, 1); assert.equal(shots.length, 6, 'enraged wraith adds a six-way radial barrage');
 assertShotSpeed(190, 'enraged wraith ring');
+
+sig = signatureBoss('colossus'); sig.t2 = 99;
+frames(sig, 1); assert.equal(sig.cstate, 'sweep_warn'); assert.equal(SV.Weapons.beams.length, 0); assert.equal(playerHits.length, 0);
+frames(sig, Math.ceil(SV.Config.BOSSES.colossus.mechanics.sweepWarn * 60) + 2);
+assert.equal(sig.cstate, 'sweep'); assert(SV.Weapons.beams.length > 0, 'colossus laser begins only after warning');
 
 SV.Game.state.difficulty = 'hard';
 sig = signatureBoss('bloodhunter');
@@ -310,8 +394,8 @@ assert(html.includes('进化条件：' + SV.Config.PASSIVES.luck.name + ' Lv5'))
 // Exercise pickup movement through the real player update path.
 load('entities.js');
 SV.Input = { axis: { x: 0, y: 0 } };
-SV.Audio = { pickup() {} };
-SV.Effects = { text() {}, ring() {}, shake() {} };
+SV.Audio = { pickup() {}, die() {} };
+SV.Effects = { text() {}, ring() {}, shake() {}, death() {}, explosion() {}, hit() {} };
 SV.Game.onXP = () => {};
 const pickState = { player: SV.Entities.makePlayer(), passives: {}, charMul: { hpMul: 1, speedMul: 1 }, charMods: {}, stage: SV.Config.STAGES.ruins, difficulty: 'normal', hazards: [], gems: [], pickups: [], enemies: [], time: 0, afterimages: [], xp: 0 };
 pickState.pickups.push(SV.Entities.makePickup(70, 0, 'treasure'));
@@ -328,4 +412,49 @@ pickState.pickups = [SV.Entities.makePickup(70, 0, 'health')];
 pickState.player.hp = pickState.player.maxHp;
 SV.Entities.updatePlayer(pickState, 1 / 60);
 assert.equal(pickState.pickups[0].x, 70);
+
+assert.equal(SV.Entities.eliteHealthDropLateFactor({ time: 600 }), 1, 'elite health drops unchanged through 10m');
+assert(SV.Entities.eliteHealthDropLateFactor({ time: 1080 }) < SV.Entities.healthDropLateFactor({ time: 1080 }), 'elite health drops decay faster at 18m');
+const lootState = {
+  player: SV.Entities.makePlayer(), passives: {}, charMul: { hpMul: 1, speedMul: 1 }, charMods: {},
+  stage: SV.Config.STAGES.ruins, difficulty: 'normal', enemies: [], gems: [], pickups: [], hazards: [], eshots: [],
+  time: 0, kills: 0, bossFlags: { count: 2, wraithEnrage: false }, _bossLoot: {}, enemyDamage: {}, weaponDamage: {}, weaponActive: {}
+};
+const lootA = SV.Entities.makeBoss(lootState, 'duke', 0, 0), lootB = SV.Entities.makeBoss(lootState, 'architect', 10, 0);
+Object.assign(lootA, { hp: 0, lootGroup: 7, bossSource: 'late' });
+Object.assign(lootB, { lootGroup: 7, bossSource: 'late' });
+lootState.enemies = [lootA, lootB];
+SV.Entities.killEnemy(lootState, lootA);
+assert.equal(lootState.gems.length, 0, 'non-final wave Boss drops no Boss gems');
+assert.deepEqual(lootState.pickups.map(p => p.kind), ['health'], 'non-final wave Boss can only drop health');
+lootB.hp = 0;
+SV.Entities.killEnemy(lootState, lootB);
+assert.equal(lootState.pickups.filter(p => p.kind === 'treasure').length, 1, 'final wave Boss drops the only chest');
+assert.equal(lootState.gems.length, 8, 'final wave Boss drops the wave gems');
+
+// Overlapping hostile bullets are consumed together, but only one can damage the
+// player during the short projectile-only grace window.
+SV.Spatial = { queryCircle() { return []; } };
+SV.AI = { update() {} };
+SV.Audio.hurt = () => {};
+SV.Game.onPlayerDeath = () => {};
+const burstState = {
+  player: SV.Entities.makePlayer(), passives: {}, charMul: { hpMul: 1, speedMul: 1 }, charMods: {},
+  stage: SV.Config.STAGES.ruins, difficulty: 'normal', hazards: [], gems: [], pickups: [], enemies: [],
+  eshots: [], time: 0, afterimages: [], enemyDamage: {}, weaponDamage: {}, weaponActive: {}
+};
+burstState.eshots.push(
+  { x: 0, y: 0, vx: 0, vy: 0, dmg: 10, r: 5, life: 1, srcType: 'shooter' },
+  { x: 0, y: 0, vx: 0, vy: 0, dmg: 10, r: 5, life: 1, srcType: 'shooter' }
+);
+SV.Entities.updateEnemies(burstState, 1 / 60);
+assert.equal(burstState.player.hp, burstState.player.maxHp - 10, 'overlapping hostile bullets deal one burst of damage');
+assert.equal(burstState.eshots.length, 0, 'all overlapping hostile bullets are consumed');
+burstState.eshots.push({ x: 0, y: 0, vx: 0, vy: 0, dmg: 10, r: 5, life: 1, srcType: 'shooter' });
+SV.Entities.updateEnemies(burstState, 1 / 60);
+assert.equal(burstState.player.hp, burstState.player.maxHp - 10, 'projectile grace blocks the immediate follow-up');
+burstState.player.eshotIframe = 0;
+burstState.eshots.push({ x: 0, y: 0, vx: 0, vy: 0, dmg: 10, r: 5, life: 1, srcType: 'shooter' });
+SV.Entities.updateEnemies(burstState, 1 / 60);
+assert.equal(burstState.player.hp, burstState.player.maxHp - 20, 'hostile bullets damage again after the grace window');
 console.log('logic_test_balance: OK');

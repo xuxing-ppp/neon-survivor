@@ -222,6 +222,19 @@
     </div>
   </div>
 
+  <!-- 暂停界面重新开始确认 -->
+  <div id="restartConfirmScreen" class="screen hidden">
+    <div class="screen-card confirm-card restart-confirm-card">
+      <div class="confirm-glyph">⚠</div>
+      <h2 data-i18n="restart.confirmTitle">RESTART THIS RUN?</h2>
+      <p class="tagline" data-i18n="restart.confirmText">Current progress will be lost. This cannot be undone.</p>
+      <div class="btn-row">
+        <button class="big-btn danger-btn" data-act="confirmRestart" data-i18n="restart.confirm">↻ RESTART RUN</button>
+        <button class="mini-btn" data-act="cancelRestart" data-i18n="restart.cancel">KEEP PLAYING</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 结算界面 -->
   <div id="gameoverScreen" class="screen hidden">
     <div class="screen-card">

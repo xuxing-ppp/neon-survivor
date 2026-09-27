@@ -67,7 +67,7 @@
       state.spawnPause = 0;
       state.bossSpawned = [];   // 按关卡 bosses 下标记录是否已刷
       state.lateBossIndex = 0;
-      state.endlessBossNext = 20 * 60 + C.ENDLESS_BOSS_EVERY;
+      state.endlessBossNext = C.ENDLESS_BOSS_FIRST;
     },
 
     update: function (state, dt) {
@@ -109,18 +109,20 @@
         const pool = state.lateBossIndex < C.LATE_BOSS_TIMES.length && state.time >= C.LATE_BOSS_TIMES[state.lateBossIndex] ? stageBossPool(state.stage) : null;
         while (state.lateBossIndex < C.LATE_BOSS_TIMES.length && state.time >= C.LATE_BOSS_TIMES[state.lateBossIndex]) {
           state.lateBossIndex++;
+          const lootGroup = state._bossWaveGid = (state._bossWaveGid || 0) + 1;
           const n = U.randInt(2, 3);
-          for (let i = 0; i < n; i++) bossQueue.push({ type: U.choice(pool), source: "late" });
+          for (let i = 0; i < n; i++) bossQueue.push({ type: U.choice(pool), source: "late", lootGroup: lootGroup });
         }
       }
 
-      // 无尽模式:从 21:00 起每分钟一波(随机 1-3 只同台)
+      // 无尽模式:从 20:30 起每 90s 一波(随机 2-3 只同台)
       if (state.endless) {
         const pool = state.time >= state.endlessBossNext ? stageBossPool(state.stage) : null;
         while (state.time >= state.endlessBossNext) {
           state.endlessBossNext += C.ENDLESS_BOSS_EVERY;
-          const n = U.randInt(1, 3);
-          for (let i = 0; i < n; i++) bossQueue.push({ type: U.choice(pool), source: "endless" });
+          const lootGroup = state._bossWaveGid = (state._bossWaveGid || 0) + 1;
+          const n = U.randInt(2, 3);
+          for (let i = 0; i < n; i++) bossQueue.push({ type: U.choice(pool), source: "endless", lootGroup: lootGroup });
         }
       }
       if (bossQueue.length) this.spawnBosses(state, bossQueue);
@@ -134,14 +136,14 @@
       let spawned = 0;
       for (let b = 0; b < bossTypes.length; b++) {
         const item = bossTypes[b], bossType = typeof item === "string" ? item : item.type;
-        const source = typeof item === "string" ? "manual" : (item.source || "manual"), def = CFG.BOSSES[bossType];
+        const source = typeof item === "string" ? "manual" : (item.source || "manual"), lootGroup = typeof item === "string" ? 0 : (item.lootGroup || 0), def = CFG.BOSSES[bossType];
         if (!def) continue;
         const count = def.count || 1;
         const gid = count > 1 ? (state._bossGid = (state._bossGid || 0) + 1) : 0; // 多体 Boss 同组共享 gid(整组只掉一份 Boss 奖励)
         for (let i = 0; i < count; i++) {
           const pos = spawnPos(state);
           const e = SV.Entities.addBoss(state, bossType, pos.x, pos.y);
-          if (e) { spawned++; e.bossSource = source; if (gid) e.gid = gid; }
+          if (e) { spawned++; e.bossSource = source; if (gid) e.gid = gid; if (lootGroup) e.lootGroup = lootGroup; }
         }
       }
       if (!spawned) return;

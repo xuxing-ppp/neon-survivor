@@ -23,5 +23,15 @@ ok(!/[\u3400-\u9fff]/.test(await page.locator("#weaponSelectScreen").innerText()
 await page.locator('[data-act="beginRun"]').click();await page.waitForTimeout(100);
 await page.locator('#btnPause').click();await page.waitForTimeout(50);
 ok(!/[\u3400-\u9fff]/.test(await page.locator("#pauseScreen").innerText()),"pause and bestiary shell have no Chinese leakage in English mode");
+const pausedTime=await page.evaluate(()=>SV.Game.state.time);
+await page.locator('#pauseScreen [data-act="restart"]').click();await page.waitForTimeout(50);
+ok(await page.locator('#restartConfirmScreen').isVisible(),"pause restart opens confirmation");
+ok(!/[\u3400-\u9fff]/.test(await page.locator('#restartConfirmScreen').innerText()),"restart confirmation is localized in English");
+await page.waitForTimeout(80);
+ok(Math.abs((await page.evaluate(()=>SV.Game.state.time))-pausedTime)<.02,"restart confirmation keeps simulation frozen");
+await page.locator('[data-act="cancelRestart"]').click();
+ok(await page.locator('#pauseScreen').isVisible()&&await page.evaluate(()=>SV.Game.mode)==='paused',"restart cancellation returns to pause");
+await page.locator('#pauseScreen [data-act="restart"]').click();await page.locator('[data-act="confirmRestart"]').click();await page.waitForTimeout(50);
+ok(await page.evaluate(()=>SV.Game.mode==='playing'&&SV.Game.state.time<.5),"confirmed restart begins a fresh run");
 ok(errs.length===0,"no browser errors");
 await browser.close();console.log("browser i18n passed");})().catch(e=>{console.error(e);process.exit(1);});

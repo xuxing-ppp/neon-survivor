@@ -295,6 +295,7 @@
       this._drawEnemyCores(state);
       this._drawBossCues(state);
       this._drawChargeWarnings(state);
+      this._drawRangedWarnings(state);
       this._drawBlinkWarnings(state);
       this._drawProjectileCores(state);
       this._drawEShots(state);
@@ -536,12 +537,12 @@
         const mech = (SV.Config.BOSSES[e.bossType] && SV.Config.BOSSES[e.bossType].mechanics) || {};
         const tier = SV.Config.BOSSES[e.bossType].tier;
         const phase = e.cstate, pulse = 0.65 + 0.25 * Math.sin(tm * 12);
-        const projectileCue = phase === "ice_warn" || phase === "ice_follow" || phase === "blood_mark" || phase === "rift_open" ||
-          (phase === "tele" && e.bossType === "thornwarden") || phase === "storm_sweep" || phase === "ritual" ||
+        const projectileCue = phase === "ice_warn" || phase === "ice_beam" || phase === "ice_follow" || phase === "blood_mark" || phase === "rift_open" ||
+          (phase === "tele" && e.bossType === "thornwarden") || phase === "storm_warn" || phase === "storm_sweep" || phase === "ritual" ||
+          phase === "sweep_warn" || phase === "architect_warn" || phase === "pull_warn" || phase === "swap" || phase === "judge_warn" ||
           phase === "eclipse_charge" || phase === "eclipse_second";
         const pincerCue = phase === "blood_mark" || phase === "rift_open";
-        // 普通弹幕仍不显示蓄力预警；夹击弹幕必须展示实际来源和扇面，才能公平躲避。
-        if (projectileCue && !pincerCue) { ctx.restore(); continue; }
+        // 有明确状态的攻击只绘制专属预警；普通阶段继续绘制 Boss 外环。
         if (!projectileCue) {
           ctx.strokeStyle = e.color; ctx.globalAlpha = pulse;
           ctx.globalAlpha = 0.28 + 0.08 * Math.sin(tm * 3 + e.id); ctx.lineWidth = tier === 3 ? 3.5 : 2.5;
@@ -563,17 +564,18 @@
           }
         }
         if (phase === "ice_warn" || phase === "ice_follow") {
-          const a = U.angleTo(e.x, e.y, e.markX, e.markY);
+          const a = Number.isFinite(e.cdir) ? e.cdir : U.angleTo(e.x, e.y, e.markX, e.markY);
           for (const off of [-mech.flankAngle, mech.flankAngle]) {
             const ang = a + off, dx = Math.cos(ang), dy = Math.sin(ang);
-            ctx.globalAlpha = 0.13; ctx.fillStyle = "#a6eaff"; ctx.beginPath(); ctx.moveTo(e.x, e.y);
-            ctx.lineTo(e.x + dx * 210 - dy * 14, e.y + dy * 210 + dx * 14);
-            ctx.lineTo(e.x + dx * 210 + dy * 14, e.y + dy * 210 - dx * 14); ctx.closePath(); ctx.fill();
-            ctx.globalAlpha = pulse; ctx.lineWidth = 3; line(e.x, e.y, e.x + dx * 210, e.y + dy * 210);
+            const len = mech.beamLength || 600, half = mech.beamWidth || 10;
+            ctx.globalAlpha = phase === "ice_warn" ? 0.13 : 0.05; ctx.fillStyle = "#a6eaff"; ctx.beginPath(); ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.x + dx * len - dy * half, e.y + dy * len + dx * half);
+            ctx.lineTo(e.x + dx * len + dy * half, e.y + dy * len - dx * half); ctx.closePath(); ctx.fill();
+            ctx.globalAlpha = pulse; ctx.lineWidth = phase === "ice_warn" ? 3 : 1.5; line(e.x, e.y, e.x + dx * len, e.y + dy * len);
             ctx.fillStyle = "#d7f8ff";
-            for (let k = 1; k <= (reduced ? 2 : 3); k++) shard(e.x + dx * k * 55, e.y + dy * k * 55, ang + tm * 2 + k, 8);
+            for (let k = 1; k <= (reduced ? 2 : 4); k++) shard(e.x + dx * k * len / 5, e.y + dy * k * len / 5, ang + tm * 2 + k, 8);
           }
-          if (phase === "ice_follow") { ctx.setLineDash([7, 5]); line(e.x, e.y, e.x + Math.cos(a) * 220, e.y + Math.sin(a) * 220); ctx.setLineDash([]); }
+          if (phase === "ice_follow") { ctx.setLineDash([7, 5]); line(e.x, e.y, e.x + Math.cos(a) * (mech.beamLength || 600), e.y + Math.sin(a) * (mech.beamLength || 600)); ctx.setLineDash([]); }
         } else if (phase === "blood_mark") {
           const a = Number.isFinite(e.cdir) ? e.cdir : U.angleTo(e.x, e.y, e.markX, e.markY) + Math.PI / 2;
           aura(e.markX, e.markY, 58, e.color, 0.43);
@@ -605,12 +607,38 @@
           for (let k = 0; k < 6; k++) { const q = k * U.TAU / 6; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 20, q + 0.1, q + 0.75); ctx.stroke(); }
           ctx.fillStyle = "#ffe2ed";
           for (let k = 0; k < 3; k++) { const q = e.cdir + (k - 1) * mech.spread; shard(e.x + Math.cos(q) * 92, e.y + Math.sin(q) * 92, q, 14); }
-        } else if (phase === "storm_sweep") {
-          ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(e.x, e.y, 150, e.cdir, e.cdir + mech.sweepAngle); ctx.stroke();
-          const a = e.cdir + (mech.sweep - e.ct) * mech.sweepAngle / mech.sweep;
+        } else if (phase === "storm_warn" || phase === "storm_sweep") {
+          const dir = e.sweepDir || 1, end = e.cdir + dir * mech.sweepAngle;
+          ctx.lineWidth = phase === "storm_warn" ? 5 : 3; ctx.beginPath(); ctx.arc(e.x, e.y, 150, e.cdir, end, dir < 0); ctx.stroke();
+          const a = phase === "storm_warn" ? e.cdir : e.cdir + dir * (mech.sweep - e.ct) * mech.sweepAngle / mech.sweep;
           ctx.strokeStyle = "#e5dcff"; ctx.beginPath(); ctx.moveTo(e.x, e.y);
           for (let k = 1; k <= 6; k++) { const d = k * 28; ctx.lineTo(e.x + Math.cos(a) * d + Math.sin(a) * (k & 1 ? 8 : -8), e.y + Math.sin(a) * d - Math.cos(a) * (k & 1 ? 8 : -8)); }
           ctx.stroke();
+          if (phase === "storm_warn") { ctx.globalAlpha = 0.25; ctx.fillStyle = e.color; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.arc(e.x, e.y, 150, e.cdir, end, dir < 0); ctx.closePath(); ctx.fill(); }
+        } else if (phase === "sweep_warn" && e.bossType === "colossus") {
+          const len = mech.laserLength || 600, dx = Math.cos(e.cdir), dy = Math.sin(e.cdir), half = mech.laserWidth || 16;
+          ctx.globalAlpha = 0.17; ctx.fillStyle = e.color; ctx.beginPath(); ctx.moveTo(e.x, e.y);
+          ctx.lineTo(e.x + dx * len - dy * half, e.y + dy * len + dx * half);
+          ctx.lineTo(e.x + dx * len + dy * half, e.y + dy * len - dx * half); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = pulse; ctx.strokeStyle = "#ffe2d8"; ctx.lineWidth = 4; ctx.setLineDash([12, 8]);
+          line(e.x, e.y, e.x + dx * len, e.y + dy * len); ctx.setLineDash([]);
+        } else if (phase === "architect_warn") {
+          for (const q of [[e.flankAX, e.flankAY], [e.flankBX, e.flankBY]]) {
+            aura(q[0], q[1], 52, e.color, 0.42); ctx.globalAlpha = pulse; ctx.strokeStyle = "#c9f6ff"; ctx.lineWidth = 3;
+            ring(q[0], q[1], 18); ring(q[0], q[1], 34); line(q[0], q[1], e.x, e.y);
+          }
+        } else if (phase === "pull_warn") {
+          const r = 95 + 45 * U.clamp(e.ct / Math.max(0.01, mech.pullWarn), 0, 1);
+          aura(e.x, e.y, r, e.color, 0.35); ctx.globalAlpha = pulse; ctx.strokeStyle = "#d8d0ff"; ctx.lineWidth = 4;
+          ring(e.x, e.y, r); ring(e.x, e.y, Math.max(e.r + 10, r - 32));
+          for (let k = 0; k < 6; k++) { const a = k * U.TAU / 6; line(e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, e.x + Math.cos(a) * (r - 24), e.y + Math.sin(a) * (r - 24)); }
+        } else if (phase === "swap" && e.bossType === "twins") {
+          const other = state.enemies.find(function (o) { return o !== e && o.bossType === "twins" && o.hp > 0; });
+          if (other) { ctx.globalAlpha = pulse; ctx.strokeStyle = "#c8ffff"; ctx.lineWidth = 4; ctx.setLineDash([10, 7]); line(e.x, e.y, other.x, other.y); ctx.setLineDash([]); ring(e.x, e.y, e.r + 14); ring(other.x, other.y, other.r + 14); }
+        } else if (phase === "judge_warn") {
+          aura(e.echoX, e.echoY, 55, e.color, 0.32); aura(e.markX, e.markY, 68, e.color, 0.42);
+          ctx.globalAlpha = pulse; ctx.strokeStyle = "#e8cfff"; ctx.lineWidth = 3; ctx.setLineDash([9, 6]);
+          line(e.echoX, e.echoY, e.markX, e.markY); ctx.setLineDash([]); ring(e.echoX, e.echoY, 26); ring(e.markX, e.markY, 38);
         } else if (phase === "ritual") {
           for (const id of e.ritualMinionIds || []) {
             const o = state.enemies.find(function (other) { return other.id === id && other.hp > 0; });
@@ -762,6 +790,26 @@
         ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, U.TAU); ctx.stroke();
         ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
         drawShapePath(ctx, e.x, e.y, e.r + 4 + pulse * 3, "triangle"); ctx.stroke();
+        ctx.restore();
+      }
+    },
+    // 普通远程敌人只显示蓄力倒计时圈；离体炮台额外显示射击来源和方向。
+    _drawRangedWarnings: function (state) {
+      const arr = state.enemies, tm = state.time || 0;
+      for (let i = 0; i < arr.length; i++) {
+        const e = arr[i], warning = e.cstate === "shot_warn" || e.cstate === "sniper_warn";
+        if (!warning || e.x < view.l || e.x > view.r || e.y < view.t || e.y > view.b) continue;
+        const sniper = e.cstate === "sniper_warn", def = SV.Config.ENEMIES[sniper ? "sniper" : "shooter"];
+        const warn = e.architectTurret ? SV.Config.BOSSES.architect.mechanics.turretWarn : def.shotWarn;
+        const left = U.clamp((e.ct || 0) / warn, 0, 1), len = 440;
+        const dx = Math.cos(e.cdir), dy = Math.sin(e.cdir), pulse = 0.65 + 0.25 * Math.sin(tm * 24 + e.id);
+        ctx.save(); ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = sniper ? "#ff91ef" : (e.architectTurret ? "#8fe8ff" : "#70dfff");
+        if (e.architectTurret) {
+          ctx.globalAlpha = 0.55 + pulse * 0.3; ctx.lineWidth = 2; ctx.setLineDash([7, 6]);
+          ctx.lineDashOffset = -tm * 55; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + dx * len, e.y + dy * len); ctx.stroke();
+        }
+        ctx.setLineDash([]); ctx.globalAlpha = 0.8; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 7 + left * 10, 0, U.TAU); ctx.stroke();
         ctx.restore();
       }
     },
@@ -1090,13 +1138,30 @@
       ctx.restore();
     },
     _drawBlades: function (state) {
-      const blades = state.player.blades;
+      const p = state.player, blades = p.blades, aura = p.bladeAuraVisual;
       if (!blades || !blades.length) return;
+      // 湮灭之轮判定圆盘：边界与结算脉冲在低特效模式仍完整保留，仅省略大面积辉光。
+      if (aura && aura.radius > 0) {
+        const reduced = SV.Effects.isReduced(), pulse = U.clamp(aura.pulse || 0, 0, 1), r = aura.radius;
+        ctx.save();
+        if (!reduced) {
+          ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 0.11;
+          ctx.drawImage(glow(aura.color || "#ffd0a0"), p.x - r, p.y - r, r * 2, r * 2);
+        }
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = "rgba(255,218,150," + (reduced ? 0.035 : 0.065) + ")";
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, U.TAU); ctx.fill();
+        ctx.strokeStyle = aura.color || "#ffd0a0"; ctx.globalAlpha = reduced ? 0.62 : 0.78; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, U.TAU); ctx.stroke();
+        ctx.globalAlpha = (reduced ? 0.38 : 0.62) * (1 - pulse * 0.45); ctx.lineWidth = reduced ? 2 : 4;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r * (0.2 + 0.8 * pulse), 0, U.TAU); ctx.stroke();
+        ctx.restore();
+      }
       ctx.save(); ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < blades.length; i++) {
         const b = blades[i];
         if (b.x < view.l || b.x > view.r || b.y < view.t || b.y > view.b) continue;
-        ctx.globalAlpha = 0.9; ctx.drawImage(glow("#cfefff"), b.x - 20, b.y - 20, 40, 40);
+        if (!SV.Effects.isReduced()) { ctx.globalAlpha = 0.9; ctx.drawImage(glow(aura ? "#ffd0a0" : "#cfefff"), b.x - 20, b.y - 20, 40, 40); }
       }
       ctx.globalAlpha = 1; ctx.restore();
       // 刃体:带白色亮核的长刃菱形(与圆形弹丸拉开辨识度)
@@ -1104,7 +1169,7 @@
         const b = blades[i];
         if (b.x < view.l || b.x > view.r || b.y < view.t || b.y > view.b) continue;
         ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.angle);
-        ctx.fillStyle = "#8ef0ff"; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
+        ctx.fillStyle = aura ? "#ffd58a" : "#8ef0ff"; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(0, 4); ctx.lineTo(-10, 0); ctx.lineTo(0, -4); ctx.closePath();
         ctx.fill(); ctx.stroke();
         ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(7, 0); ctx.stroke();

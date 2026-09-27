@@ -53,6 +53,43 @@ function spawn(s, scene, index, distance) {
   e.speed = e.regenRate = 0;
   s.enemies.push(e);
 }
+// Annihilation Wheel uses one explicit ruleset for its disk, blades, and pull boundary.
+{
+  const s = makeState("blade_aura"), spec = SV.Weapons.stats(s.weapons[0], s);
+  s.enemies = [];
+  const inside = SV.Entities.makeEnemy(s, "brute", spec.radius - 60, 0);
+  const outside = SV.Entities.makeEnemy(s, "brute", spec.radius + 35, 0);
+  for (const e of [inside, outside]) { e.hp = e.maxHp = 1e6; e.speed = e.dmg = 0; e.bladeCd = 99; }
+  s.enemies.push(inside, outside);
+  SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, 1 / 60);
+  assert(Math.abs((1e6 - inside.hp) - spec.auraDamage) < 1e-9, "disk damages enemies inside its full radius");
+  assert.strictEqual(outside.hp, 1e6, "disk does not damage enemies outside its radius");
+  assert(Math.abs(s.player.bladeAuraVisual.radius - spec.radius) < 1e-9, "disk visual uses the gameplay radius");
+}
+{
+  const s = makeState("blade_aura"), spec = SV.Weapons.stats(s.weapons[0], s), dtBlade = 1 / 60;
+  s.weapons[0].cd = 1; // isolate blade contact and its splash from the disk pulse
+  const angle = spec.spin * dtBlade;
+  const target = SV.Entities.makeEnemy(s, "brute", Math.cos(angle) * spec.radius, Math.sin(angle) * spec.radius);
+  target.hp = target.maxHp = 1e6; target.speed = target.dmg = 0; s.enemies = [target];
+  SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, dtBlade);
+  assert(Math.abs((1e6 - target.hp) - spec.damage - spec.splashDamage) < 1e-8, "blade contact applies explicit direct and splash damage");
+  assert(Math.abs(target.bladeCd - spec.bladeTick) < 1e-9, "blade contact uses its configured per-target interval");
+}
+for (const step of [1 / 60, 0.5]) {
+  const s = makeState("blade_aura"), spec = SV.Weapons.stats(s.weapons[0], s), stop = spec.radius * spec.pullStopRatio;
+  const enemy = SV.Entities.makeEnemy(s, "brute", spec.radius * 1.12, 0);
+  enemy.hp = enemy.maxHp = 1e9; enemy.speed = enemy.dmg = 0; enemy.bladeCd = 99;
+  s.enemies = [enemy];
+  for (let i = 0; i < 300 && enemy.x > stop + 1e-8; i++) { SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, step); }
+  assert(enemy.x >= stop - 1e-8 && enemy.x <= stop + 1e-7, `pull clamps at 96% orbit for dt=${step}`);
+  const held = enemy.x; SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, step);
+  assert(Math.abs(enemy.x - held) < 1e-9, "enemy no longer approaches inside the stop radius");
+  const boss = SV.Entities.makeBoss(s, "duke", spec.radius * 1.12, 0), bossX = boss.x;
+  boss.hp = boss.maxHp = 1e9; boss.speed = boss.dmg = 0; boss.bladeCd = 99; s.enemies = [boss];
+  SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, step);
+  assert.strictEqual(boss.x, bossX, "Boss is immune to Annihilation Wheel pull");
+}
 function measure(id, scene, bossDistance) {
   seed = 123456789;
   const s = makeState(id);
@@ -116,6 +153,8 @@ const rows = SV.Config.FUSIONS.map(f => {
   return { id: f.to, boss: values[f.to].boss / bossBase, swarm: values[f.to].swarm / swarmBase,
     fusionBoss: values[f.to].boss, bossBase, fusionSwarm: values[f.to].swarm, swarmBase };
 });
+const plagueRow = rows.find(r => r.id === "hex_poison");
+assert(plagueRow && plagueRow.boss > 1 && plagueRow.swarm > 1, "腐朽天灾削弱后仍应强于两件材料中的较强者");
 function ratio(next, base) { return base > 0 ? next / base : next > 0 ? Infinity : 1; }
 const evoRows = evolutionPairs.map(pair => ({ id: pair.evo,
   boss: ratio(values[pair.evo].boss, values[pair.base].boss),

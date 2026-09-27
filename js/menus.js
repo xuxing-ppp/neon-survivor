@@ -106,6 +106,7 @@
       screens.weaponselect = document.getElementById("weaponSelectScreen");
       screens.select = document.getElementById("selectScreen");
       screens.pause = document.getElementById("pauseScreen");
+      screens.restartconfirm = document.getElementById("restartConfirmScreen");
       screens.gameover = document.getElementById("gameoverScreen");
       screens.endlessprompt = document.getElementById("endlessPromptScreen");
       // 事件委托:对动态生成的关卡卡同样生效
