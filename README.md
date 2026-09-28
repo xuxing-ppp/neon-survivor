@@ -26,7 +26,7 @@
 
 ### 在线游玩
 
-[打开 GitHub Pages 版本](https://ppp401.github.io/neon-survivor/)
+[打开 GitHub Pages 版本](https://xuxing-ppp.github.io/neon-survivor/)
 
 ### 本地游玩
 
