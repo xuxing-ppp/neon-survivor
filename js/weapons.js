@@ -48,6 +48,7 @@
   const beams = []; // {pts,life,max,color,width}
   const swings = []; // 扇形挥砍视觉 {x,y,dir,arc,radius,life,max,color}
   const arcFields = []; // 满月斩环扇地带 + 月轮残迹
+  const orbitContacts = new WeakMap(); // 死亡之轮:每武器记录上一帧各敌人与哪些刀刃接触(运行时态,不进存档)
   let arcFieldSeq = 0;
   function addArcField(field) { field.fieldId = ++arcFieldSeq; arcFields.push(field); }
 
@@ -111,6 +112,8 @@
       const intervalKeys = ["cooldown", "tick", "fireCd", "hitCd", "launchCd", "beamTick", "gridTick", "corridorTick", "fieldTick", "coreTick", "bladeTick", "auraTick"];
       for (let i = 0; i < damageKeys.length; i++) if (s[damageKeys[i]] != null) s[damageKeys[i]] *= mech.damageMul || 1.2;
       for (let i = 0; i < intervalKeys.length; i++) if (s[intervalKeys[i]] != null) s[intervalKeys[i]] /= mech.frequencyMul || 1.2;
+      // 死亡之轮的攻击频率完全由可见转速决定；超频必须同步加快视觉旋转。
+      if (w.id === "blade_evo") s.spin *= mech.frequencyMul || 1.2;
     }
     return s;
   }
@@ -909,20 +912,42 @@
       for (let i = 0; i < s.count; i++) blades.push({ angle: (w.angle || 0) + i / s.count * U.TAU, x: 0, y: 0 });
     }
     w.angle = (w.angle || 0) + s.spin * dt;
-    const cdEvery = hardAttackInterval(state, def.evo ? 0.25 : 0.3);
+    const contactNow = w.id === "blade_evo" ? new Map() : null;
+    const contactPrev = contactNow ? (orbitContacts.get(w) || new Map()) : null;
+    const cdEvery = hardAttackInterval(state, 0.3);
     for (let i = 0; i < blades.length; i++) {
       const b = blades[i];
       b.angle = (w.angle || 0) + i / blades.length * U.TAU;
       b.x = p.x + Math.cos(b.angle) * s.radius;
       b.y = p.y + Math.sin(b.angle) * s.radius;
-      const near = SV.Spatial.queryCircle(b.x, b.y, 18);
+      // 最大 Boss 半径为 90；查询半径必须覆盖实际命中半径 16+e.r，不能漏掉静止大目标。
+      const near = SV.Spatial.queryCircle(b.x, b.y, 110);
       for (let j = 0; j < near.length; j++) {
         const e = near[j];
         if (e.hp <= 0) continue;
-        if (U.dist2(b.x, b.y, e.x, e.y) < (16 + e.r) * (16 + e.r) && e.bladeCd <= 0) {
-          dmgEnemy(e, s.damage, w.id); e.bladeCd = cdEvery; SV.Effects.hit(e.x, e.y, def.color); SV.Audio.hit();
+        if (U.dist2(b.x, b.y, e.x, e.y) < (16 + e.r) * (16 + e.r)) {
+          if (contactNow) {
+            const hit = contactNow.get(e.id);
+            if (hit) hit.mask |= 1 << i;
+            else contactNow.set(e.id, { enemy: e, mask: 1 << i });
+          } else if (e.bladeCd <= 0) {
+            dmgEnemy(e, s.damage, w.id); e.bladeCd = cdEvery; SV.Effects.hit(e.x, e.y, def.color); SV.Audio.hit();
+          }
         }
       }
+    }
+    if (contactNow) {
+      for (const [enemyId, hit] of contactNow) {
+        const previous = contactPrev.get(enemyId);
+        const entered = hit.mask & ~(previous ? previous.mask : 0);
+        if (!entered) continue;
+        const e = hit.enemy;
+        if (!e || e.hp <= 0) continue;
+        let bits = entered;
+        while (bits && e.hp > 0) { dmgEnemy(e, s.damage, w.id); bits &= bits - 1; }
+        SV.Effects.hit(e.x, e.y, def.color); SV.Audio.hit();
+      }
+      orbitContacts.set(w, contactNow);
     }
   }
 

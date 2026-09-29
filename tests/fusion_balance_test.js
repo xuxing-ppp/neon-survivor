@@ -53,6 +53,38 @@ function spawn(s, scene, index, distance) {
   e.speed = e.regenRate = 0;
   s.enemies.push(e);
 }
+// Death Wheel damage is driven by visible blade contact rather than a per-target timer.
+{
+  const s = makeState("blade_evo"), w = s.weapons[0], spec = SV.Weapons.stats(w, s), step = 1 / 60;
+  w.angle = 0;
+  const target = SV.Entities.makeEnemy(s, "brute", Math.cos(spec.spin * step) * spec.radius, Math.sin(spec.spin * step) * spec.radius);
+  target.hp = target.maxHp = 1e9; target.speed = target.dmg = 0; s.enemies = [target];
+  SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, step);
+  assert(Math.abs((1e9 - target.hp) - spec.damage) < 1e-6, `first visible blade contact deals one hit (${1e9 - target.hp} vs ${spec.damage})`);
+  const afterFirst = target.hp;
+  SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, 1 / 600);
+  assert.strictEqual(target.hp, afterFirst, "the same blade does not repeat damage while still overlapping");
+  for (let frame = 2; frame < 600; frame++) { SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, step); }
+  const dealt = 1e9 - target.hp, expected = spec.damage * spec.count * spec.spin / (Math.PI * 2) * 10;
+  assert(Math.abs(dealt / expected - 1) < 0.05, `contact-driven DPS stays near the old cap (${dealt} vs ${expected})`);
+
+  const normal = SV.Weapons.stats(w, s);
+  s.charId = "overclocker"; s.special = "overclocker"; s.overclockActive = 1;
+  const boosted = SV.Weapons.stats(w, s);
+  assert(Math.abs(boosted.spin / normal.spin - 1.2) < 1e-9, "overclock visibly accelerates Death Wheel rotation");
+  assert(Math.abs(boosted.damage / normal.damage - 1.2) < 1e-9, "overclock retains its Death Wheel damage multiplier");
+}
+// Judgment Array keeps five-shot cadence while applying the configured HP fraction and Boss divisor.
+for (const boss of [false, true]) {
+  const s = makeState("sentry_hex"), spec = SV.Weapons.stats(s.weapons[0], s);
+  const target = boss ? SV.Entities.makeBoss(s, "duke", 300, 0) : SV.Entities.makeEnemy(s, "brute", 300, 0);
+  target.hp = target.maxHp = 10000; target.speed = target.dmg = 0; s.enemies = [target];
+  SV.Entities.rebuildGrid(s); SV.Weapons.updateAll(s, 1 / 60);
+  const expected = spec.damage * spec.judgeHits + spec.judgeDmg + target.maxHp * spec.judgeFrac * (boss ? 1 / 5 : 1);
+  assert(Math.abs((10000 - target.hp) - expected) < 1e-8, `Judgment Array applies ${boss ? "Boss" : "normal"} max-HP damage`);
+  assert.strictEqual(target._judgeHits, 0, "judgment consumes all five marks");
+  assert.strictEqual(target._judgeLock, spec.judgeLock, "judgment starts its configured lockout");
+}
 // Annihilation Wheel uses one explicit ruleset for its disk, blades, and pull boundary.
 {
   const s = makeState("blade_aura"), spec = SV.Weapons.stats(s.weapons[0], s);

@@ -130,7 +130,7 @@
       case "vortex_evo": out.push("卷伤每0.2s×" + (Math.round(s.life * 10) / 10) + "s · 吸力" + R(s.pull)); break;
       case "shockwave_evo": out.push("命中冻结 " + (Math.round(s.freeze * 10) / 10) + "s"); break;
       case "boomerang_sentry": out.push("每塔" + (Math.round(s.fireCd * 100) / 100) + "s发射 · 去返穿透" + (s.pierce || 0) + "次"); break;
-      case "blade_evo": out.push("每敌命中间隔0.25s"); break;
+      case "blade_evo": out.push("每把刀刃按实际接触造成伤害"); break;
       case "blade_boomerang": out.push("环刃轮流离阵追敌并返航 · 环触间隔" + F10(s.hitCd) + "s"); break;
       case "blade_frost": out.push("每敌第" + s.frostHits + "击冰爆" + R(s.burstDmg) + "(半径" + R(s.burstR) + ") · 冻结" + F10(s.freeze) + "s"); break;
       case "missile_aura": out.push("分头追踪 · 命中附着电浆核" + F10(s.coreLife) + "s · 半径" + R(s.coreR) + " · " + R(s.coreDmg) + "/" + F10(s.coreTick) + "s"); break;
@@ -179,7 +179,7 @@
       case "shotgun_evo":case "polymorph_evo":out.push("Pierces "+(s.pierce||0)+" per shot");break;case "sentry_evo":out.push("Turret rounds pierce "+(s.pierce||0));break;
       case "frost_evo":out.push("Every "+(s.freezeHits||1)+" hits freezes "+F(s.freeze)+"s (+50% damage)");break;case "poison_evo":out.push(F(s.dotDur)+"s · spreads and slows "+Math.round(s.slow*100)+"%/"+F(s.slowDur)+"s");break;
       case "vortex_evo":out.push("Vortex damage every 0.2s×"+F(s.life)+"s · Pull "+R(s.pull));break;case "shockwave_evo":out.push("Hit freezes "+F(s.freeze)+"s");break;
-      case "boomerang_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · pierce "+(s.pierce||0));break;case "blade_evo":out.push("0.25s hit interval per enemy");break;
+      case "boomerang_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · pierce "+(s.pierce||0));break;case "blade_evo":out.push("Each blade deals damage on actual contact");break;
       case "blade_boomerang":out.push("Blades hunt and return in sequence · ring interval "+F(s.hitCd)+"s");break;case "blade_frost":out.push("Every "+s.frostHits+" hits: ice burst "+R(s.burstDmg)+" (radius "+R(s.burstR)+") · freeze "+F(s.freeze)+"s");break;
       case "missile_aura":out.push("Split tracking · attached plasma core "+F(s.coreLife)+"s · radius "+R(s.coreR)+" · "+R(s.coreDmg)+"/"+F(s.coreTick)+"s");break;case "missile_railgun":out.push("Guides for "+F(s.calibrate)+"s, then pierces infinitely");break;
       case "chain_sentry":out.push("Each turret fires every "+F(s.fireCd)+"s · "+s.chainHops+" jumps");break;case "aura_poison":out.push("Corrosion stacks to "+s.maxStacks+" · +"+Math.round(s.stackMul*100)+"% damage each");break;

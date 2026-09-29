@@ -58,18 +58,19 @@ const oldBossHpFactor = t => 1 + 0.2 * t + 0.006 * t * t;
 const oldEndlessMul = o => 1 + 0.22 * o + 0.01 * o * o;
 const near = (actual, expected, label) => assert(Math.abs(actual - expected) < 1e-9, `${label}: ${actual}`);
 near(SV.Config.CURVES.hpFactor(5) / oldHpFactor(5), 1.30, '5m enemy HP ratio');
-near(SV.Config.CURVES.hpFactor(13.5) / oldHpFactor(13.5), 1.90, '13.5m enemy HP ratio');
-near(SV.Config.CURVES.hpFactor(18) / oldHpFactor(18), 2.15, '18m enemy HP ratio');
-near(SV.Config.CURVES.hpFactor(20) / oldHpFactor(20), 2.25, '20m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(9.5) / oldHpFactor(9.5), 1.50, '9.5m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(13.5) / oldHpFactor(13.5), 1.55, '13.5m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(18) / oldHpFactor(18), 1.63, '18m enemy HP ratio');
+near(SV.Config.CURVES.hpFactor(20) / oldHpFactor(20), 1.65, '20m enemy HP ratio');
 near(SV.Config.CURVES.bossHpFactor(5) / oldBossHpFactor(5), 2.00, '5m Boss HP ratio');
-near(SV.Config.CURVES.bossHpFactor(9.5) / oldBossHpFactor(9.5), 2.50, '9.5m Boss HP ratio');
-near(SV.Config.CURVES.bossHpFactor(13.5) / oldBossHpFactor(13.5), 2.90, '13.5m Boss HP ratio');
-near(SV.Config.CURVES.bossHpFactor(18) / oldBossHpFactor(18), 3.00, '18m Boss HP ratio');
-near(SV.Config.CURVES.bossHpFactor(20) / oldBossHpFactor(20), 3.10, '20m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(9.5) / oldBossHpFactor(9.5), 2.25, '9.5m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(13.5) / oldBossHpFactor(13.5), 2.25, '13.5m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(18) / oldBossHpFactor(18), 2.28, '18m Boss HP ratio');
+near(SV.Config.CURVES.bossHpFactor(20) / oldBossHpFactor(20), 2.30, '20m Boss HP ratio');
 const enemy25Ratio = SV.Config.CURVES.hpFactor(25) * SV.Config.CURVES.endlessHpMul(5) / (oldHpFactor(25) * oldEndlessMul(5));
-near(enemy25Ratio, 2.55, '25m endless enemy HP versus old curve');
+near(enemy25Ratio, 1.70, '25m endless enemy HP versus old curve');
 const boss25Ratio = SV.Config.CURVES.bossHpFactor(25) * SV.Config.CURVES.endlessHpMul(5) / (oldBossHpFactor(25) * oldEndlessMul(5));
-assert(Math.abs(boss25Ratio - 3.42) < 0.01, '25m endless Boss HP is about 3.42× the old curve');
+near(boss25Ratio, 2.35, '25m endless Boss HP versus old curve');
 near(SV.Config.CURVES.dmgFactor(13.5), 1.75, '13.5m damage factor');
 near(SV.Config.CURVES.dmgFactor(18), 2.05, '18m damage factor');
 near(SV.Config.CURVES.dmgFactor(20), 2.20, '20m damage factor');
@@ -100,6 +101,33 @@ assert.deepEqual(Object.assign({}, SV.Config.BOSSES.wraith.mechanics), { orbitRa
 const annihilation = SV.Config.WEAPON_EVOS.blade_aura.stats(8);
 assert.deepEqual({ damage: annihilation.damage, bladeTick: annihilation.bladeTick, splash: annihilation.splash, splashDamage: annihilation.splashDamage, auraDamage: annihilation.auraDamage, auraTick: annihilation.auraTick, pullRangeMul: annihilation.pullRangeMul, pullStopRatio: annihilation.pullStopRatio }, { damage: 46.2, bladeTick: 0.25, splash: 26, splashDamage: 27.72, auraDamage: 27.72, auraTick: 0.4, pullRangeMul: 1.3, pullStopRatio: 0.96 });
 assert(annihilation.radius >= 201 && annihilation.radius <= 203, 'annihilation disk radius stays about 202');
+const deathWheel = SV.Config.WEAPON_EVOS.blade_evo.stats(8);
+assert.equal(deathWheel.spin, 3.2, 'death wheel uses readable contact-driven rotation');
+const judgment = SV.Config.WEAPON_EVOS.sentry_hex.stats(8);
+assert.equal(judgment.judgeFrac, 0.08, 'judgment array deals 8% max HP to normal enemies');
+near(judgment.judgeFrac / 5, 0.016, 'judgment array deals 1.6% max HP to Bosses');
+const chars = SV.Config.CHARACTERS;
+assert.deepEqual(
+  {
+    bulwarkSpeed: chars.bulwark.speedMul, assassinHp: chars.assassin.hpMul, assassinHigh: chars.assassin.mechanics.highMul,
+    collectorSpeed: chars.collector.speedMul, berserkerHp: chars.berserker.hpMul, berserkerHealing: chars.berserker.charMods.healingMul,
+    berserkerFull: chars.berserker.mechanics.fullDamageMul, lingererSpeed: chars.lingerer.speedMul,
+    lingererPickup: chars.lingerer.charMods.pickupMul, overclockerHp: chars.overclocker.hpMul,
+    overclockerIncoming: chars.overclocker.mechanics.incomingMul, phantomHp: chars.phantom.hpMul
+  },
+  {
+    bulwarkSpeed: 0.96, assassinHp: 0.95, assassinHigh: 0.9,
+    collectorSpeed: 0.98, berserkerHp: 1, berserkerHealing: 0.65,
+    berserkerFull: 0.95, lingererSpeed: 0.96,
+    lingererPickup: 0.95, overclockerHp: 0.95,
+    overclockerIncoming: 1.15, phantomHp: 0.95
+  }
+);
+assert.deepEqual(
+  { arcanistHp: chars.arcanist.hpMul, arcanistPickup: chars.arcanist.charMods.pickupMul, rangerHp: chars.ranger.hpMul, rangerPickup: chars.ranger.charMods.pickupMul },
+  { arcanistHp: 0.85, arcanistPickup: 0.75, rangerHp: 0.85, rangerPickup: 0.8 },
+  'weapon specialists retain their existing penalties'
+);
 let previousBossDifficulty = null;
 for (const id of SV.Config.DIFFICULTY_ORDER) {
   const d = SV.Config.DIFFICULTY[id];
